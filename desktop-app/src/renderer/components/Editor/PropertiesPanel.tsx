@@ -9,6 +9,8 @@ import AlignmentToolbar from './AlignmentToolbar';
 import FontPicker from './FontPicker';
 import GradientPicker from './GradientPicker';
 import AnimatedBgPicker from './AnimatedBgPicker';
+import AlignmentPicker from './AlignmentPicker';
+import type { TextPlacement } from '../../utils/alignmentUtils';
 
 
 const PropertiesPanel: React.FC = () => {
@@ -424,7 +426,8 @@ const onElementImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) =>
                       {btn.label}
                     </button>
                   ))}
-                  {['left', 'center', 'right'].map(align => (
+                 
+                  {/* {['left', 'center', 'right'].map(align => (
                     <button key={align}
                       onClick={() => updateElement(currentSlideIndex, selectedElement.id, { textAlign: align })}
                       className={`flex-1 px-2 py-1 rounded text-xs ${
@@ -434,7 +437,17 @@ const onElementImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) =>
                       }`}>
                       {align === 'left' ? '≡←' : align === 'center' ? '≡↔' : '→≡'}
                     </button>
-                  ))}
+                  ))} */}
+                </div>
+                <div className="flex column gap-1">
+                  <div className="w-full">
+                   <AlignmentPicker
+                    value={selectedElement.textPlacement ?? 'topLeft'}
+                    onChange={(placement: TextPlacement)=>{
+                      updateElement(currentSlideIndex,selectedElement.id,{textPlacement:placement});
+                    }}
+                    />
+                    </div>
                 </div>
               </>
             )}

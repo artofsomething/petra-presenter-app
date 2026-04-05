@@ -48,6 +48,11 @@ const ANIMATED_BG_META: Record<string, { emoji: string; label: string; colors: s
   'vortex':         { emoji: '🌪️', label: 'Vortex',     colors: ['#6366f1', '#ec4899'] },
   'glitch':         { emoji: '📺', label: 'Glitch',     colors: ['#00ff9f','#ff003c'] },
   'underwater':     { emoji: '🌊', label: 'Underwater', colors: ['#0ea5e9', '#06b6d4'] },
+  'northen-lights': { emoji: '🌠', label: 'NorthenLights', colors : ['#00ff87','#60efff']},
+  'meteor-shower': { emoji: '☄️', label:'Meteor Shower', colors : ['#93f5fd','#fde68a']},
+  'sand-storm': {emoji: '🌪️', label:'Sand Storm', colors: ['#d97706','#92400e']},
+  'neon-rain': {emoji: '🌧️', label:'Neon Rain', colors : ['#ff00ff','#00ffff']},
+  'bokeh': {emoji:'💡', label:'Bokeh', colors : ['#ff9ff3','#ffeaa7']}
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -210,6 +210,11 @@ class SlidePreview extends StatelessWidget {
     'vortex':      ['#6366f1', '#ec4899'],
     'glitch':      ['#00ff9f','#ff003c'] ,
     'underwater':  ['#0ea5e9', '#06b6d4'] ,
+    'northen-lights':['#00ff87','#60efff'],
+    'meteor-shower': ['#93f5fd','#fde68a'],
+    'sand-storm':   ['#d97706','#92400e'],
+    'neon-rain':    ['#ff00ff','#00ffff'],
+    'bokeh': ['#ff9ff3','#ffeaa7']
   };
 
   final defaults  = typeColors[type] ?? ['#1a1a2e', '#2a2a4e'];
@@ -236,7 +241,12 @@ class SlidePreview extends StatelessWidget {
     'plasma':     '🌈',
     'vortex':     '🌪️',
     'glitch':     '📺',
-    'underwater': '🌊'
+    'underwater': '🌊',
+    'northen-lights':'🌠',
+    'meteor-shower':'☄️',
+    'sand-storm':'🌪️',
+    'neon-rain':'🌧️',
+    'bokeh':'💡'
   }[type] ?? '🎨';
 
   final label = type.replaceAll('-', ' ').toUpperCase();

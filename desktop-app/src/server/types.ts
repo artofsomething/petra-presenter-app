@@ -15,7 +15,6 @@ export interface SlideElement {
   fontColor?: string;
   fontWeight?: string;
   fontStyle?: string;
-  textAlign?: string;
   strokeColor?: string;
   strokeWidth?: number;
   shadowColor?: string;
@@ -36,6 +35,12 @@ export interface SlideElement {
   isLocked?: boolean;
   cornerRadius?: number;
   fillGradient?: GradientConfig;
+  textAlign?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
+  textPlacement?: 
+    | 'topLeft' | 'topCenter' | 'topRight'
+    | 'middleLeft' | 'middleCenter' | 'middleRight'
+    | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
 }
 
 // ... rest of types
@@ -136,10 +141,17 @@ export type AnimatedBgType =
   | 'plasma'
   | 'vortex'
   | 'glitch'
-  | 'underwater';
+  | 'underwater'
+  | 'northern-lights'
+  | 'meteor-shower'
+  | 'sand-storm'
+  | 'neon-rain'
+  | 'bokeh';
 
 export interface AnimatedBackground {
   type:    AnimatedBgType;
+  backgroundColor?: string;
+  backgroundColor2?:string;
   speed?:  number;   // 0.5 = slow, 1 = normal, 2 = fast
   color1?: string;   // primary color
   color2?: string;   // secondary color
