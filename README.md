@@ -88,67 +88,26 @@ Every animated background supports:
 ---
 
 ## 🏗️ Architecture
-petra-presenter/
-│
-├── src/
-│ ├── main/ # Electron main process
-│ │ ├── main.ts # App entry point
-│ │ └── preload.ts # Context bridge
-│ │
-│ ├── server/ # Shared backend + types
-│ │ ├── types.ts # SlideElement, Slide, AnimatedBackground...
-│ │ ├── socketServer.ts # Socket.io server
-│ │ └── presentationService.ts # Business logic
-│ │
-│ └── renderer/ # React frontend (desktop + web)
-│ ├── components/
-│ │ ├── Editor/
-│ │ │ ├── Canvas.tsx # Konva slide canvas
-│ │ │ ├── EditableText.tsx # Text element
-│ │ │ ├── PropertiesPanel.tsx # Right panel
-│ │ │ ├── SlideList.tsx # Left slide thumbnails
-│ │ │ ├── AlignmentToolbar.tsx # Align/distribute toolbar
-│ │ │ ├── AlignmentPicker.tsx # 3x3 text placement grid
-│ │ │ ├── AnimatedBackground.tsx # Background renderer + registry
-│ │ │ ├── AnimatedBgPicker.tsx # Background picker UI
-│ │ │ ├── LayerControls.tsx # Z-order controls
-│ │ │ ├── TransitionControl.tsx # Slide transitions
-│ │ │ ├── FontPicker.tsx # Font browser
-│ │ │ ├── GradientPicker.tsx # Solid/gradient picker
-│ │ │ │
-│ │ │ ├── AnimatedBackgrounds/ # One folder per background
-│ │ │ │ ├── Aurora/
-│ │ │ │ ├── Waves/
-│ │ │ │ ├── Bokeh/
-│ │ │ │ └── ...24 total
-│ │ │ │
-│ │ │ └── Backgrounds/ # Color controls
-│ │ │ ├── ColorRow.tsx # Shared swatch + hex input
-│ │ │ ├── AuroraControls.tsx
-│ │ │ ├── WavesControls.tsx
-│ │ │ ├── BokehControls.tsx
-│ │ │ ├── GenericBgControls.tsx # Reusable 3-color panel
-│ │ │ └── ...
-│ │ │
-│ │ └── Presenter/
-│ │ └── PresentView.tsx # Full-screen output window
-│ │
-│ ├── store/
-│ │ └── usePresentation.ts # Zustand global store
-│ │
-│ └── utils/
-│ ├── alignmentUtils.ts # Text placement helpers
-│ └── fileManager.ts # File reading / blob URLs
-│
-└── mobile/ # Flutter mobile controller
-├── lib/
-│ ├── main.dart
-│ ├── screens/
-│ │ ├── controller_screen.dart # Slide remote control
-│ │ └── notes_screen.dart # Speaker notes view
-│ └── services/
-│ └── socket_service.dart # Socket.io client
-└── pubspec.yaml
+## 🏗️ Architecture
+
+Petra is split into **3 apps** that communicate over **Socket.io**:
+
+- 🖥️ **Desktop Editor** — Electron + React (main app)
+- 📱 **Mobile Controller** — Flutter (remote control)
+- 🌐 **Web Editor** — React in browser (no install needed)
+
+### Desktop
+- `src/main/` — Electron entry point + preload
+- `src/server/` — Socket.io server + shared types
+- `src/renderer/components/Editor/` — Canvas, Properties Panel, Slide List
+- `src/renderer/components/Editor/AnimatedBackgrounds/` — 24+ background components
+- `src/renderer/components/Presenter/` — Full-screen output window
+- `src/renderer/store/` — Zustand global state
+- `src/renderer/utils/` — Alignment, file, and blob helpers
+
+### Mobile
+- `lib/screens/` — Controller screen + Speaker notes view
+- `lib/services/` — Socket.io client
 
 
 
