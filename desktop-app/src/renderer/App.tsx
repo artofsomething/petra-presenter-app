@@ -2,11 +2,14 @@
 import { lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 
-const Editor        = lazy(() => import('./pages/EditorPage'));
-const Presentation  = lazy(() => import('./pages/PresentationPage'));
-const Controller    = lazy(() => import('./components/Controller/ControllerPage'));
-const ViewerView    = lazy(() => import('./components/Presenter/ViewerView'));
-const MobileEditorPage = lazy(()=> import('./pages/MobileEditorPage'));
+const Editor            = lazy(() => import('./pages/EditorPage'));
+const Presentation      = lazy(() => import('./pages/PresentationPage'));
+const Controller        = lazy(() => import('./components/Controller/ControllerPage'));
+const ViewerView        = lazy(() => import('./components/Presenter/ViewerView'));
+const MobileEditorPage  = lazy(()=> import('./pages/MobileEditorPage'));
+const MainMenu          = lazy(()=> import('./pages/MainMenu'));
+const StageDisplayPage  = lazy(()=> import('./pages/StageDisplayPage'));
+
 
 // ✅ Simple loading fallback
 function LoadingScreen() {
@@ -22,7 +25,9 @@ export default function App() {
     <HashRouter>
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
-          <Route path="/"               element={<Editor />} />
+          <Route path="/"               element={<MainMenu />} />
+          <Route path="/editor"         element={<Editor/>}/>
+          <Route path="/stage"          element={<StageDisplayPage/>}/>
           <Route path="/presentation"   element={<Presentation />} />
           <Route path="/controller"     element={<Controller />} />
           <Route path="/viewer"         element={<ViewerView />} />

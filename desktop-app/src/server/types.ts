@@ -158,3 +158,17 @@ export interface AnimatedBackground {
   color3?: string;   // accent color
   opacity?: number;  // 0–1
 }
+
+export interface StageFile{
+  id:           string;
+  name:         string;
+  presentation: Presentation;
+  activeSlideIndex : number;
+}
+
+export interface StageDisplay{
+  files:            StageFile[];
+  activeFileId:     string | null;
+  presentingFileId: string | null;
+  presentingSlideIndex:number;
+}

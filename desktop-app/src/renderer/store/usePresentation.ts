@@ -5,8 +5,11 @@ import type {
     Presentation,
     Slide,
     SlideElement,
-    AnimatedBackground
+    AnimatedBackground,
+    StageDisplay,
+    StageFile
 } from '../../server/types';
+
 
 interface PresentationState {
   presentation: Presentation | null;
@@ -51,6 +54,15 @@ interface PresentationState {
   toggleLockElement: (elementId:string)=>void;
   loadPresentation: (presentation: Presentation) => void;
   updateSlideBackground: (updates : {backgroundColor?:string, backgroundGradient?:any; backgroundImage?:string, backgroundVideo?:string;animatedBackground?:AnimatedBackground|undefined})=>void;
+
+  //Stage Display
+  stage: StageDisplay;
+  stageLoadFile: (file:StageFile)=>void;
+  stageRemoveFile: (fileId:string)=>void;
+  stageSetActiveFile: (fileId:string)=>void;
+  stageSetSlide: (fileId:string, slideIndex: number)=>void;
+  stageClear: ()=>void;
+  stageSetPresentingFile: (fileId: string | null,slideIndex?:number) => void; // ✅ 
 }
 
 const createDefaultSlide = (order: number): Slide => ({
@@ -566,7 +578,102 @@ toggleLockElement: (elementId: string) => {
     });
   },
 
+  //Stage Display
+  stage:{
+    files : [],
+    activeFileId: null,
+    presentingFileId:null,
+    presentingSlideIndex:0
+  },
 
+  stageLoadFile: (file) => {
+    set((state) => {
+      // ✅ prevent duplicate
+      const exists = state.stage.files.find(f => f.id === file.id);
+      if (exists) return state;
+      const fileWithIndex:StageFile = {
+        ...file, activeSlideIndex:0
+      };
+
+      return {
+        stage: {
+          ...state.stage,
+          files:        [...state.stage.files, fileWithIndex],
+          activeFileId: state.stage.activeFileId ?? file.id,
+        },
+      };
+    });
+  },
+
+  // ── remove a file from stage ─────────────────────────────
+  stageRemoveFile: (fileId) => {
+    set((state) => {
+      const remaining = state.stage.files.filter(f => f.id !== fileId);
+
+      // if we removed the active file, fall back to first remaining
+      const newActiveId =
+        state.stage.activeFileId === fileId
+          ? (remaining[0]?.id ?? null)
+          : state.stage.activeFileId;
+
+      return {
+        stage: {
+          ...state.stage,
+          files:            remaining,
+          activeFileId:     newActiveId,
+          activeSlideIndex: 0,
+        },
+      };
+    });
+  },
+
+  // ── switch active file ────────────────────────────────────
+  stageSetActiveFile: (fileId) => {
+    set((state) => ({
+      stage: {
+        ...state.stage,
+        activeFileId:     fileId,
+      },
+    }));
+  },
+
+  // ── change slide within a file ───────────────────────────
+  stageSetSlide: (fileId, slideIndex) => {
+  set((state) => ({
+    stage: {
+      ...state.stage,
+      activeFileId: fileId,
+      files: state.stage.files.map(f =>
+        f.id === fileId
+          ? { ...f, activeSlideIndex: slideIndex } // ✅ per-file
+          : f
+      ),
+    },
+  }));
+},
+
+  // Add action implementation:
+  stageSetPresentingFile: (fileId,slideIndex=0) => {
+    set((state) => ({
+      stage: {
+        ...state.stage,
+        presentingFileId: fileId,
+        presentingSlideIndex:slideIndex
+      },
+    }));
+  },
+
+  // ── clear stage ───────────────────────────────────────────
+  stageClear: () => {
+    set({
+      stage: {
+        files:            [],
+        activeFileId:     null,
+        presentingFileId:null,
+        presentingSlideIndex:0
+      },
+    });
+  },
 
 }));
 

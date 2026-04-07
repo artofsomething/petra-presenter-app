@@ -17,6 +17,7 @@ import AssetLibrary from '../components/Editor/AssetLibrary';
 import { useAssetStore, type AssetItem } from '../hooks/useAssets';
 import { getImageDimensions, getVideoDimensions, fitToSlide} from '../utils/getAssetDimensions';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../components/MobileEditor/MobileSlideCanvas';
+import BackButton from '../components/Shared/BackButton';
 
 // ── New Presentation Modal ────────────────────────────────────────────────────
 const NewPresentationModal: React.FC<{
@@ -388,7 +389,6 @@ const LayoutPickerModal: React.FC<LayoutPickerModalProps> = ({
 const SOCKET_OPTIONS = {role:'editor' as const, name: 'Desktop Editor'};
 
 const EditorPage: React.FC = () => {
-
   const {
     emitUpdatePresentation,
     emitStartPresentation,
@@ -794,6 +794,7 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
       <header className="h-12 bg-gray-900 border-b border-gray-800
                          flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-3">
+          <BackButton/>
           <h1 className="text-sm font-bold text-blue-400">🎤 Presenter App</h1>
 
           {isEditingName ? (

@@ -57,3 +57,67 @@ export function readFileAsDataUrl(file: File): Promise<string | null> {
     reader.readAsDataURL(file);
   });
 }
+
+
+
+export function readFileAsText(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader    = new FileReader();
+    reader.onload   = (e) => resolve(e.target?.result as string);
+    reader.onerror  = ()  => resolve(null);
+    reader.readAsText(file);
+  });
+}
+// ── ✅ readFileAsJson — used by StageDisplay to load .petra/.json files ───────
+
+export async function readFileAsJson<T = unknown>(
+  file: File,
+): Promise<T | null> {
+  try {
+    const text = await readFileAsText(file);
+    if (!text) return null;
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.error('[fileManager] Failed to parse JSON file:', file.name, err);
+    return null;
+  }
+}
+
+// ── ✅ readFileAsArrayBuffer — useful for binary formats ──────────────────────
+
+export function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer | null> {
+  return new Promise((resolve) => {
+    const reader    = new FileReader();
+    reader.onload   = (e) => resolve(e.target?.result as ArrayBuffer);
+    reader.onerror  = ()  => resolve(null);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── ✅ File type guards ────────────────────────────────────────────────────────
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
+}
+
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith('video/');
+}
+
+export function isJsonFile(file: File): boolean {
+  return (
+    file.type === 'application/json' ||
+    file.name.endsWith('.json')      ||
+    file.name.endsWith('.petra')
+  );
+}
+
+// ── ✅ Format file size helper ────────────────────────────────────────────────
+
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0)              return '0 B';
+  if (bytes < 1024)             return `${bytes} B`;
+  if (bytes < 1024 * 1024)      return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
