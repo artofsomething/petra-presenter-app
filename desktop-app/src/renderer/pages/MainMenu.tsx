@@ -39,13 +39,13 @@ const MENU_CARDS: MenuCard[] = [
     description: 'Control slides from this window',
     color:       '#059669',
   },
-  {
-    path:        '/mobile-editor',
-    emoji:       '📱',
-    label:       'Mobile Editor',
-    description: 'Edit presentations from a mobile browser',
-    color:       '#d97706',
-  },
+  // {
+  //   path:        '/mobile-editor',
+  //   emoji:       '📱',
+  //   label:       'Mobile Editor',
+  //   description: 'Edit presentations from a mobile browser',
+  //   color:       '#d97706',
+  // },
 ];
 
 const MainMenuPage: React.FC = () => {
