@@ -12,6 +12,7 @@ import type { SlideElement, GradientConfig, AnimatedBackground } from '../../../
 import SlideTransition from './SlideTransition';
 import AnimatedBackgroundComponent from '../Editor/AnimatedBackground';
 import type { TransitionType } from '../../types/transitions';
+import { resolveAlignment } from '../../utils/alignmentUtils';
 
 // ── Image cache ───────────────────────────────────────────────────────────────
 const presentationImageCache = new Map<string, HTMLImageElement>();
@@ -91,6 +92,7 @@ const PresentationView: React.FC = () => {
   const [debugLines, setDebugLines]               = useState<string[]>([]);
   const [showDebug, setShowDebug]                 = useState(true);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  
 
   const [dimensions, setDimensions] = useState({
     width:  window.innerWidth,
@@ -244,6 +246,9 @@ const PresentationView: React.FC = () => {
         socket.emit('next-slide'); break;
       case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
         socket.emit('prev-slide'); break;
+      case 'Escape':
+        socket.emit('stop-presentation');
+        break;
     }
   }, []);
 
@@ -603,7 +608,9 @@ const PresentationElement: React.FC<{ element: SlideElement }> = ({ element }) =
 };
 
 // ── Text ──────────────────────────────────────────────────────────────────────
-const PresentationText: React.FC<{ element: SlideElement }> = ({ element }) => (
+const PresentationText: React.FC<{ element: SlideElement }> = ({ element }) => {
+  const {horizontal, vertical} = resolveAlignment(element.textPlacement,element.textAlign,element.verticalAlign);
+return (
   <Text
     x={element.x}           y={element.y}
     width={element.width}   height={element.height}
@@ -616,7 +623,8 @@ const PresentationText: React.FC<{ element: SlideElement }> = ({ element }) => (
         element.fontStyle === 'italic' ? 'italic' : ''
       }`.trim() || 'normal'
     }
-    align={element.textAlign || 'left'}
+    align={horizontal}
+    verticalAlign={vertical}
     wrap="word"
     stroke={element.strokeColor   || undefined}
     strokeWidth={element.strokeWidth || 0}
@@ -627,8 +635,8 @@ const PresentationText: React.FC<{ element: SlideElement }> = ({ element }) => (
     rotation={element.rotation || 0}
     opacity={element.opacity ?? 1}
     listening={false}
-  />
-);
+  />);
+  };
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
 const PresentationShape: React.FC<{ element: SlideElement }> = ({ element }) => {
