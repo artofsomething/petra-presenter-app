@@ -5,6 +5,7 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import {
   Stage, Layer, Rect, Text, Circle, Ellipse, Star,
   Image as KonvaImage,
+  Line,
 } from 'react-konva';
 import Konva from 'konva';
 import { io } from 'socket.io-client';
@@ -13,6 +14,8 @@ import SlideTransition from './SlideTransition';
 import AnimatedBackgroundComponent from '../Editor/AnimatedBackground';
 import type { TransitionType } from '../../types/transitions';
 import { resolveAlignment } from '../../utils/alignmentUtils';
+import { formatDisplayText } from '../../utils/textFormatter';
+import { getRenderedLines, } from '../../utils/underlineUtils';
 
 // ── Image cache ───────────────────────────────────────────────────────────────
 const presentationImageCache = new Map<string, HTMLImageElement>();
@@ -93,6 +96,7 @@ const PresentationView: React.FC = () => {
   const [showDebug, setShowDebug]                 = useState(true);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   
+
 
   const [dimensions, setDimensions] = useState({
     width:  window.innerWidth,
@@ -609,34 +613,90 @@ const PresentationElement: React.FC<{ element: SlideElement }> = ({ element }) =
 
 // ── Text ──────────────────────────────────────────────────────────────────────
 const PresentationText: React.FC<{ element: SlideElement }> = ({ element }) => {
-  const {horizontal, vertical} = resolveAlignment(element.textPlacement,element.textAlign,element.verticalAlign);
-return (
-  <Text
-    x={element.x}           y={element.y}
-    width={element.width}   height={element.height}
-    text={element.text || ''}
-    fontSize={element.fontSize || 24}
-    fontFamily={element.fontFamily || 'Arial'}
-    fill={element.fontColor || '#000000'}
-    fontStyle={
-      `${element.fontWeight === 'bold' ? 'bold' : ''} ${
-        element.fontStyle === 'italic' ? 'italic' : ''
-      }`.trim() || 'normal'
-    }
-    align={horizontal}
-    verticalAlign={vertical}
-    wrap="word"
-    stroke={element.strokeColor   || undefined}
-    strokeWidth={element.strokeWidth || 0}
-    shadowColor={element.shadowColor || undefined}
-    shadowBlur={element.shadowBlur   || 0}
-    shadowOffsetX={element.shadowOffsetX || 0}
-    shadowOffsetY={element.shadowOffsetY || 0}
-    rotation={element.rotation || 0}
-    opacity={element.opacity ?? 1}
-    listening={false}
-  />);
-  };
+  const { horizontal, vertical } = resolveAlignment(
+    element.textPlacement,
+    element.textAlign,
+    element.verticalAlign,
+  );
+
+  const displayText = formatDisplayText(element.text || '');
+  const fontSize    = element.fontSize || 24;
+  const fontStyle   = element.fontStyle  === 'italic' ? 'italic' : 'normal';
+  const fontWeight  = element.fontWeight === 'bold'   ? 'bold'   : 'normal';
+  const konvaFontStyle = [fontWeight === 'bold' ? 'bold' : '', fontStyle === 'italic' ? 'italic' : '']
+    .filter(Boolean).join(' ') || 'normal';
+
+  // ── Get stage scale from the Layer ───────────────────────────────────────
+  // In your Stage setup: <Layer x={offsetX} y={offsetY} scaleX={scale} scaleY={scale}>
+  // So pass those values here via props or context
+  // For now we compute underlines in element-space and draw in Layer-space
+
+  const underlineLines = element.underline
+    ? getRenderedLines({
+        text:          displayText,
+        fontSize,
+        fontFamily:    element.fontFamily  || 'Arial',
+        fontStyle,
+        fontWeight,
+        lineHeight:    element.lineHeight??1.2,
+        elementWidth:  element.width,
+        elementHeight: element.height,
+        elementX:      element.x,
+        elementY:      element.y,
+        align:         horizontal,
+        verticalAlign: vertical,
+        // ✅ No stage transform needed — we're already inside the scaled Layer
+        stageScaleX:   1,
+        stageScaleY:   1,
+        stageX:        0,
+        stageY:        0,
+      })
+    : [];
+
+  const strokeW = Math.max(0.5, fontSize * 0.04);
+
+  return (
+    <>
+      <Text
+        x={element.x}         y={element.y}
+        width={element.width} height={element.height}
+        text={displayText}
+        fontSize={fontSize}
+        fontFamily={element.fontFamily || 'Arial'}
+        fill={element.fontColor || '#000000'}
+        fontStyle={konvaFontStyle}
+        align={horizontal}
+        verticalAlign={vertical}
+        wrap="word"
+        lineHeight={element.lineHeight??1.2}
+        stroke={element.strokeColor    || undefined}
+        strokeWidth={element.strokeWidth || 0}
+        shadowColor={element.shadowColor || undefined}
+        shadowBlur={element.shadowBlur   || 0}
+        shadowOffsetX={element.shadowOffsetX || 0}
+        shadowOffsetY={element.shadowOffsetY || 0}
+        rotation={element.rotation || 0}
+        opacity={element.opacity ?? 1}
+        listening={false}
+      />
+
+      {/* ✅ Underlines — drawn in Layer space (already scaled by Layer) */}
+      {element.underline && underlineLines.map((line: { x: number; y: number; width: any; }, i: React.Key | null | undefined) => (
+        <Line
+          key={i}
+          points={[
+            line.x,           line.y,
+            line.x + line.width, line.y,
+          ]}
+          stroke={element.fontColor || '#ffffff'}
+          strokeWidth={strokeW}
+          opacity={element.opacity ?? 1}
+          listening={false}
+        />
+      ))}
+    </>
+  );
+};
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
 const PresentationShape: React.FC<{ element: SlideElement }> = ({ element }) => {

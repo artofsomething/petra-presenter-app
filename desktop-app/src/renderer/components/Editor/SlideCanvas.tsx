@@ -544,6 +544,7 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
             scale={SCALE}
             isSelected={selectedElementId === element.id}
             editable={editable}
+            lineHeight={element.lineHeight??1.2}
             onSelect={(e) => handleElementSelect(e, element.id)}
             onDragEnd={(e) => handleDragEnd(e, element)}
             onDragMove={(e)=>handleDragMove(e,element)}

@@ -425,7 +425,10 @@ export function startWebSocketServer(port: number = 8765): SocketIOServer {
       const max = cachedState.presentation.slides.length - 1;
       if (cachedState.currentSlideIndex < max) {
         cachedState.currentSlideIndex++;
-        io!.emit('slide-changed', { index: cachedState.currentSlideIndex });
+        io!.emit('slide-changed', {
+          index:    cachedState.currentSlideIndex,
+          senderId: socket.id,
+        });
         console.log(`▶ Next: ${cachedState.currentSlideIndex}`);
       }
     });
@@ -433,7 +436,10 @@ export function startWebSocketServer(port: number = 8765): SocketIOServer {
     socket.on('prev-slide', () => {
       if (cachedState.currentSlideIndex > 0) {
         cachedState.currentSlideIndex--;
-        io!.emit('slide-changed', { index: cachedState.currentSlideIndex });
+        io!.emit('slide-changed', {
+          index:    cachedState.currentSlideIndex,
+          senderId: socket.id,
+        });
         console.log(`◀ Prev: ${cachedState.currentSlideIndex}`);
       }
     });
@@ -442,26 +448,47 @@ export function startWebSocketServer(port: number = 8765): SocketIOServer {
       if (!cachedState.presentation) return;
       const max = cachedState.presentation.slides.length - 1;
       cachedState.currentSlideIndex = Math.max(0, Math.min(index, max));
-      io!.emit('slide-changed', { index: cachedState.currentSlideIndex });
+
+      // ✅ Send to ALL — Flutter filters self via senderId
+      io!.emit('slide-changed', {
+        index:    cachedState.currentSlideIndex,
+        senderId: socket.id,
+      });
+
       console.log(`🎯 Go to: ${cachedState.currentSlideIndex}`);
     });
 
-    // ── Presentation control ──────────────────────────────────────────────
     socket.on('start-presentation', () => {
       cachedState.isPresenting = true;
-      io!.emit('presentation-started', { index: cachedState.currentSlideIndex });
+
+      // ✅ FIX: broadcast to others, ack to sender
+      socket.broadcast.emit('presentation-started', {
+        index: cachedState.currentSlideIndex,
+      });
+      socket.emit('presentation-started-ack', {
+        index: cachedState.currentSlideIndex,
+      });
+
       console.log('▶️  Presentation started');
     });
 
     socket.on('stop-presentation', () => {
       cachedState.isPresenting = false;
-      io!.emit('presentation-stopped');
+
+      // ✅ FIX: broadcast to others, ack to sender
+      socket.broadcast.emit('presentation-stopped');
+      socket.emit('presentation-stopped-ack');
+
       console.log('⏹️  Presentation stopped');
     });
 
     socket.on('toggle-black-screen', () => {
       cachedState.isBlackScreen = !cachedState.isBlackScreen;
-      io!.emit('black-screen-toggled', cachedState.isBlackScreen);
+
+      // ✅ FIX: broadcast to others, ack to sender
+      socket.broadcast.emit('black-screen-toggled', cachedState.isBlackScreen);
+      socket.emit('black-screen-toggled-ack', cachedState.isBlackScreen);
+
       console.log(`🖤 Black screen: ${cachedState.isBlackScreen}`);
     });
 

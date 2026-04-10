@@ -9,6 +9,7 @@ import type {
     StageDisplay,
     StageFile
 } from '../../server/types';
+import type { GeneratedSlide } from '../utils/slideGenerator';
 
 
 interface PresentationState {
@@ -27,6 +28,7 @@ interface PresentationState {
   prevSlide: () => void;
   goToSlide: (index: number) => void;
   addSlide: (index?: number) => void;
+  addSlides:(slides:GeneratedSlide[],index?:number)=>void;
   deleteSlide: (index: number) => void;
   duplicateSlide: (index: number) => void;
   updateSlide: (index: number, slide: Partial<Slide>) => void;
@@ -251,6 +253,38 @@ toggleLockElement: (elementId: string) => {
       },
     });
   },
+
+  // In your Zustand store — add alongside addSlide
+
+addSlides: (newSlides: GeneratedSlide[], index?: number) => {
+  const { presentation } = get();
+  if (!presentation) return;
+
+  const insertIndex = index ?? presentation.slides.length;
+
+  // ── Remap order to fit insertion point ───────────────────────────────────
+  const remappedSlides = newSlides.map((slide, i) => ({
+    ...slide,
+    order: insertIndex + i + 1,
+  }));
+
+  const updatedSlides = [...presentation.slides];
+  updatedSlides.splice(insertIndex, 0, ...remappedSlides);
+
+  // ── Fix order for ALL slides after insertion ──────────────────────────────
+  const reordered = updatedSlides.map((slide, i) => ({
+    ...slide,
+    order: i + 1,
+  }));
+
+  set({
+    presentation: {
+      ...presentation,
+      slides:    reordered,
+      updatedAt: new Date().toISOString(),
+    },
+  });
+},
 
   deleteSlide: (index) => {
     const { presentation, currentSlideIndex } = get();

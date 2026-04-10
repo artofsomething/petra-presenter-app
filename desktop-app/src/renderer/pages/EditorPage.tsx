@@ -18,6 +18,8 @@ import { useAssetStore, type AssetItem } from '../hooks/useAssets';
 import { getImageDimensions, getVideoDimensions, fitToSlide} from '../utils/getAssetDimensions';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../components/MobileEditor/MobileSlideCanvas';
 import BackButton from '../components/Shared/BackButton';
+import SlideGeneratorModal from '../components/Editor/SlideGeneratorModal';
+import type { GeneratedSlide } from '../utils/slideGenerator';
 
 // ── New Presentation Modal ────────────────────────────────────────────────────
 const NewPresentationModal: React.FC<{
@@ -428,6 +430,18 @@ const EditorPage: React.FC = () => {
 
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [assetTarget, setAssetTarget] = useState<'image' | 'video' | 'bgImage' | 'bgVideo'>('image');
+  const [showGenerator, setShowGenerator] = useState(false);
+
+
+const handleGenerateSlides = useCallback((newSlides: GeneratedSlide[]) => {
+  // Capture current count BEFORE adding
+  const beforeCount = usePresentationStore.getState().presentation?.slides.length ?? 0;
+
+  usePresentationStore.getState().addSlides(newSlides);
+
+  // Now jump to the first new slide
+  usePresentationStore.getState().setCurrentSlideIndex(beforeCount);
+}, []);
   
   const handleAssetSelect = useCallback(async (asset: AssetItem) => {
     const state = usePresentationStore.getState();
@@ -839,7 +853,14 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button onClick={()=> setShowGenerator(true)}
+          className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
+          title="Generate slides from text"
+          >
+            ⚡ Generate
+          </button>
           <DisplaySettings />
+
           <button
             onClick={() => setShowNewModal(true)}
             className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
@@ -1098,6 +1119,13 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
           onSelect={handleAssetSelect}
           filter={assetTarget === 'video' || assetTarget === 'bgVideo' ? 'videos' : 'images'}
         />
+        {showGenerator && (
+        <SlideGeneratorModal
+          currentSlideCount={presentation?.slides.length??0}
+          onGenerate={handleGenerateSlides}
+          onClose={() => setShowGenerator(false)}
+        />
+      )}
     </div>
     
   );

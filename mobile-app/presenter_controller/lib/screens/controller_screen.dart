@@ -19,6 +19,9 @@ class _ControllerScreenState extends State<ControllerScreen> {
   bool _showSlideList = false;
   late PageController _pageController;
 
+  // ✅ FIX: Flag to distinguish programmatic page changes from user swipes
+  bool _isProgrammaticPageChange = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,24 +38,37 @@ class _ControllerScreenState extends State<ControllerScreen> {
     super.dispose();
   }
 
+  // ✅ FIX: Centralized method to animate page WITHOUT triggering goToSlide
+  void _animateToPage(int index) {
+    if (!_pageController.hasClients) return;
+    if (_pageController.page?.round() == index) return; // already there
+
+    _isProgrammaticPageChange = true; // ← set flag BEFORE animating
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    ).then((_) {
+      // ✅ Reset flag AFTER animation completes
+      _isProgrammaticPageChange = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<PresentationProvider>(
       builder: (context, provider, child) {
-        // Sync page controller with slide index
+
+        // ✅ FIX: Sync PageController when external slide change happens
+        // (from desktop/keyboard — NOT from our own swipe)
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_pageController.hasClients &&
-              _pageController.page?.round() != provider.currentSlideIndex) {
-            _pageController.animateToPage(
-              provider.currentSlideIndex,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            );
-          }
+          _animateToPage(provider.currentSlideIndex);
         });
 
         return Scaffold(
+          backgroundColor: const Color(0xFF0D0D1A),
           appBar: AppBar(
+            backgroundColor: const Color(0xFF1A1A2E),
             title: Text(
               provider.presentation?.name ?? 'Controller',
               style: const TextStyle(fontSize: 16),
@@ -105,7 +121,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // ===== CURRENT SLIDE INFO =====
+                // ── Slide counter ───────────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -177,48 +193,42 @@ class _ControllerScreenState extends State<ControllerScreen> {
                   ),
                 ),
 
-                // ===== SLIDE PREVIEW (Swipeable) =====
-                // 🔑 KEY CHANGE: AspectRatio 16:9 locks the slide to landscape
+                // ── Slide Preview (Swipeable) ────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: GestureDetector(
-                      onHorizontalDragEnd: (details) {
-                        if (details.primaryVelocity != null) {
-                          if (details.primaryVelocity! < -100) {
-                            provider.nextSlide();
-                            HapticFeedback.lightImpact();
-                          } else if (details.primaryVelocity! > 100) {
-                            provider.prevSlide();
-                            HapticFeedback.lightImpact();
-                          }
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: provider.totalSlides,
+                      onPageChanged: (index) {
+                        // ✅ FIX: Only call goToSlide for USER-initiated swipes
+                        // NOT for programmatic animateToPage calls
+                        if (_isProgrammaticPageChange) {
+                          debugPrint('[PageView] programmatic change to $index — skip');
+                          return;
                         }
+
+                        debugPrint('[PageView] user swiped to $index');
+                        provider.goToSlide(index);
+                        HapticFeedback.selectionClick();
                       },
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: provider.totalSlides,
-                        onPageChanged: (index) {
-                          provider.goToSlide(index);
-                          HapticFeedback.selectionClick();
-                        },
-                        itemBuilder: (context, index) {
-                          final slide = provider.presentation!.slides[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: SlidePreview(
-                              slide: slide,
-                              isActive: index == provider.currentSlideIndex,
-                              slideNumber: index + 1,
-                            ),
-                          );
-                        },
-                      ),
+                      itemBuilder: (context, index) {
+                        final slide = provider.presentation!.slides[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: SlidePreview(
+                            slide: slide,
+                            isActive: index == provider.currentSlideIndex,
+                            slideNumber: index + 1,
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
 
-                // ===== SLIDE LIST (when toggled) =====
+                // ── Slide List (when toggled) ────────────────────────────────
                 if (_showSlideList) ...[
                   Expanded(
                     child: Container(
@@ -230,7 +240,6 @@ class _ControllerScreenState extends State<ControllerScreen> {
                       ),
                       child: Column(
                         children: [
-                          // Handle bar
                           Container(
                             margin: const EdgeInsets.only(top: 8),
                             width: 40,
@@ -241,7 +250,6 @@ class _ControllerScreenState extends State<ControllerScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          // Thumbnail grid
                           Expanded(
                             child: GridView.builder(
                               padding: const EdgeInsets.all(12),
@@ -250,7 +258,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                                 crossAxisCount: 3,
                                 crossAxisSpacing: 8,
                                 mainAxisSpacing: 8,
-                                childAspectRatio: 16 / 9, // 🔑 also lock thumbnails
+                                childAspectRatio: 16 / 9,
                               ),
                               itemCount: provider.totalSlides,
                               itemBuilder: (context, index) {
@@ -261,6 +269,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                                   slideNumber: index + 1,
                                   isActive: index == provider.currentSlideIndex,
                                   onTap: () {
+                                    // ✅ goToSlide handles optimistic update + server emit
                                     provider.goToSlide(index);
                                     HapticFeedback.mediumImpact();
                                   },
@@ -274,7 +283,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                   ),
                 ],
 
-                // ===== SPEAKER NOTES =====
+                // ── Speaker Notes ────────────────────────────────────────────
                 if (provider.currentSlide?.notes != null &&
                     provider.currentSlide!.notes!.isNotEmpty) ...[
                   Container(
@@ -298,10 +307,11 @@ class _ControllerScreenState extends State<ControllerScreen> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                if (!_showSlideList) const Spacer(),
-                // ===== CONTROL BUTTONS =====
-                const ControlButtons(),
 
+                if (!_showSlideList) const Spacer(),
+
+                // ── Control Buttons ──────────────────────────────────────────
+                const ControlButtons(),
                 const SizedBox(height: 8),
               ],
             ),

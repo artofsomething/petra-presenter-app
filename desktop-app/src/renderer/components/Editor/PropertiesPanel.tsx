@@ -8,9 +8,10 @@ import TransitionControl from './TransitionControl';
 import AlignmentToolbar from './AlignmentToolbar';
 import FontPicker from './FontPicker';
 import GradientPicker from './GradientPicker';
-import AnimatedBgPicker from './AnimatedBgPicker';
+import AnimatedBgPicker from './AnimatedBgDropdownPicker';
 import AlignmentPicker from './AlignmentPicker';
 import type { TextPlacement } from '../../utils/alignmentUtils';
+import { applyListFormat, stripListFormat } from '../../utils/textFormatter';
 
 
 const PropertiesPanel: React.FC = () => {
@@ -426,6 +427,29 @@ const onElementImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) =>
                       {btn.label}
                     </button>
                   ))}
+                  <button
+                    onClick={() => updateElement(currentSlideIndex,selectedElement.id,{ underline: !selectedElement.underline })}
+                    title="Underline (U)"
+                    style={{
+                      width:        32,
+                      height:       32,
+                      borderRadius: 6,
+                      border:       '1px solid',
+                      borderColor:  selectedElement.underline ? '#3d5afe' : '#2e3447',
+                      background:   selectedElement.underline ? '#1a2a6e' : 'transparent',
+                      color:        selectedElement.underline ? '#ffffff' : '#8b92a5',
+                      cursor:       'pointer',
+                      fontSize:     14,
+                      fontWeight:   'bold',
+                      textDecoration: 'underline',  // shows U underlined in the button itself
+                      display:      'flex',
+                      alignItems:   'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    U
+                  </button>
+                  
                  
                   {/* {['left', 'center', 'right'].map(align => (
                     <button key={align}
@@ -440,6 +464,18 @@ const onElementImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) =>
                   ))} */}
                 </div>
                 <div className="flex column gap-1">
+                  <div style={{
+                    fontSize:   10,
+                    color:      '#6b7280',
+                    marginTop:  4,
+                    lineHeight: 1.6,
+                    fontFamily: 'monospace',
+                  }}>
+                    {'* item     → • bullet\n'}
+                    {'- item     → • bullet\n'}
+                    {'  * item   → ◦ nested\n'}
+                    {'1. item    → numbered'}
+                  </div>
                   <div className="w-full">
                    <AlignmentPicker
                     value={selectedElement.textPlacement ?? 'topLeft'}
@@ -448,6 +484,106 @@ const onElementImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) =>
                     }}
                     />
                     </div>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs">
+                    Line Height: {(selectedElement.lineHeight ?? 1.2).toFixed(1)}×
+                  </label>
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="3.0"
+                    step="0.1"
+                    value={selectedElement.lineHeight ?? 1.2}
+                    onChange={(e) =>
+                      updateElement(currentSlideIndex, selectedElement.id, {
+                        lineHeight: Number(e.target.value),
+                      })
+                    }
+                    className="w-full accent-blue-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-500">
+                    <span>0.8 (tight)</span>
+                    <span>1.2 (normal)</span>
+                    <span>3.0 (loose)</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">List Style</label>
+                  <div className="flex gap-1">
+
+                    {/* None */}
+                    <button
+                      onClick={() => {
+                        const currentList = selectedElement.listType ?? 'none';
+                        // Strip existing list formatting from text
+                        const cleanText = stripListFormat(selectedElement.text ?? '');
+                        updateElement(currentSlideIndex, selectedElement.id, {
+                          listType: 'none',
+                          text:     cleanText,
+                        });
+                      }}
+                      title="No list"
+                      className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 
+                                  rounded text-xs border transition-colors ${
+                        (selectedElement.listType ?? 'none') === 'none'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      <span className="text-sm leading-none">T</span>
+                      <span className="text-[9px]">None</span>
+                    </button>
+
+                    {/* Bullet */}
+                    <button
+                      onClick={() => {
+                        const currentList = selectedElement.listType ?? 'none';
+                        // Strip old format first, then apply bullet
+                        const cleanText  = stripListFormat(selectedElement.text ?? '');
+                        const bulletText = applyListFormat(cleanText, 'bullet');
+                        updateElement(currentSlideIndex, selectedElement.id, {
+                          listType: 'bullet',
+                          text:     bulletText,
+                        });
+                      }}
+                      title="Bullet list"
+                      className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5
+                                  rounded text-xs border transition-colors ${
+                        selectedElement.listType === 'bullet'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      <span className="text-sm leading-none">•</span>
+                      <span className="text-[9px]">Bullet</span>
+                    </button>
+
+                    {/* Numbered */}
+                    <button
+                      onClick={() => {
+                        const currentList = selectedElement.listType ?? 'none';
+                        // Strip old format first, then apply numbered
+                        const cleanText     = stripListFormat(selectedElement.text ?? '');
+                        const numberedText  = applyListFormat(cleanText, 'numbered');
+                        updateElement(currentSlideIndex, selectedElement.id, {
+                          listType: 'numbered',
+                          text:     numberedText,
+                        });
+                      }}
+                      title="Numbered list"
+                      className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5
+                                  rounded text-xs border transition-colors ${
+                        selectedElement.listType === 'numbered'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      <span className="text-sm leading-none">1.</span>
+                      <span className="text-[9px]">Numbered</span>
+                    </button>
+
+                  </div>
                 </div>
               </>
             )}

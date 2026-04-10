@@ -1,4 +1,8 @@
 // lib/models/slide_element.dart
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
 class SlideElement {
   final String id;
   final String type; // 'text', 'shape', 'image', 'video'
@@ -25,6 +29,11 @@ class SlideElement {
   double? shadowOffsetX;
   double? shadowOffsetY;
   String? textDecoration;
+  String? verticalAlign;   // ✅ ADD
+  String? textPlacement;   // ✅ ADD
+  bool?   underline;       // ✅ ADD
+  double? lineHeight;      // ✅ ADD
+  String? listType;        // ✅ ADD
 
   // Shape
   String? shapeType;
@@ -34,6 +43,10 @@ class SlideElement {
 
   // Image
   String? src;
+  // Video
+  String? videoSrc;        // ✅ ADD
+  bool?   autoplay;        // ✅ ADD
+  bool?   loop;            // ✅ ADD
 
   SlideElement({
     required this.id,
@@ -51,6 +64,11 @@ class SlideElement {
     this.fontWeight,
     this.fontStyle,
     this.textAlign,
+    this.verticalAlign,  // ✅
+    this.textPlacement,  // ✅
+    this.underline,      // ✅
+    this.lineHeight,     // ✅
+    this.listType,       // ✅
     this.strokeColor,
     this.strokeWidth,
     this.shadowColor,
@@ -59,6 +77,9 @@ class SlideElement {
     this.shadowOffsetY,
     this.shapeType,
     this.fill,
+    this.videoSrc,       // ✅
+    this.autoplay,       // ✅
+    this.loop,           // ✅
     this.stroke,
     this.src,
     this.cornerRadius,
@@ -74,6 +95,15 @@ class SlideElement {
     } else if (rawFill is Map) {
       fillGradient = Map<String, dynamic>.from(rawFill);
     }
+
+    // ✅ Debug log every image element parsed
+    final type = json['type'] ?? 'text';
+    if (type == 'image') {
+      final src = json['src'];
+      debugPrint('[SlideElement.fromJson] image id=${json['id']} '
+        'src=${src == null ? "NULL" : src.toString().substring(0, math.min(60, src.toString().length))}');
+    }
+
     return SlideElement(
       id: json['id'] ?? '',
       type: json['type'] ?? 'text',
@@ -89,6 +119,11 @@ class SlideElement {
       fontColor: json['fontColor'],
       fontWeight: json['fontWeight'],
       fontStyle: json['fontStyle'],
+      verticalAlign: json['verticalAlign'],   // ✅
+      textPlacement: json['textPlacement'],   // ✅
+      underline:     json['underline'],       // ✅
+      lineHeight:    json['lineHeight']?.toDouble(), // ✅
+      listType:      json['listType'],        // ✅
       textAlign: json['textAlign'],
       strokeColor: json['strokeColor'],
       strokeWidth: json['strokeWidth']?.toDouble(),
@@ -102,7 +137,13 @@ class SlideElement {
       fillGradient: fillGradient,
       stroke: json['stroke'],
       textDecoration: json['textDecoration'],
-      src: json['src'],
+      // ✅ Image — explicitly read src
+      src:           json['src'] as String?,
+
+      // ✅ Video
+      videoSrc:      json['videoSrc'] as String?,
+      autoplay:      json['autoplay'] as bool?,
+      loop:          json['loop']     as bool?,
     );
   }
 

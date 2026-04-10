@@ -433,43 +433,143 @@ class SlidePreview extends StatelessWidget {
 
   // ── Image element ─────────────────────────────────────────────────────────
   Widget _buildImageElement(SlideElement element, double scale) {
-    return Positioned(
-      left: element.x * scale,
-      top: element.y * scale,
-      width: element.width * scale,
-      height: element.height * scale,
-      child: Transform.rotate(
-        angle: (element.rotation ?? 0) * (3.141592653589793 / 180),
-        child: Opacity(opacity: element.opacity.clamp(0.0, 1.0), child: _buildImageWidget(element.src)),
+  // ✅ Debug — log what src we actually received
+  debugPrint('[SlidePreview] image element id=${element.id} src=${
+    element.src == null
+      ? "NULL"
+      : element.src!.isEmpty
+        ? "EMPTY"
+        : element.src!.substring(0, math.min(80, element.src!.length))
+  }');
+
+  return Positioned(
+    left:   element.x      * scale,
+    top:    element.y      * scale,
+    width:  element.width  * scale,
+    height: element.height * scale,
+    child: Transform.rotate(
+      angle: (element.rotation ?? 0) * (math.pi / 180),
+      child: Opacity(
+        opacity: element.opacity.clamp(0.0, 1.0),
+        child: ClipRect(
+          child: _buildImageWidget(element.src, element.width * scale, element.height * scale),
+        ),
       ),
+    ),
+  );
+}
+
+Widget _buildImageWidget(String? src, [double? width, double? height]) {
+  // ── Placeholder for missing src ───────────────────────────────────────────
+  if (src == null || src.isEmpty) {
+    debugPrint('[SlidePreview] image src is null/empty');
+    return _imagePlaceholder(Icons.image, 'No src');
+  }
+
+  // ── blob: URLs are Electron-local — cannot load in Flutter ───────────────
+  if (src.startsWith('blob:')) {
+    debugPrint('[SlidePreview] blob: URL — not accessible from Flutter');
+    return _imagePlaceholder(Icons.cloud_off, 'Local only');
+  }
+
+  // ── data:image — base64 encoded ───────────────────────────────────────────
+  if (src.startsWith('data:image')) {
+    debugPrint('[SlidePreview] data: image, length=${src.length}');
+    try {
+      final commaIdx = src.indexOf(',');
+      if (commaIdx == -1) {
+        debugPrint('[SlidePreview] data: URI missing comma');
+        return _imagePlaceholder(Icons.broken_image, 'Bad data URI');
+      }
+
+      final base64Str = src.substring(commaIdx + 1).trim();
+      if (base64Str.isEmpty) {
+        return _imagePlaceholder(Icons.broken_image, 'Empty data');
+      }
+
+      // ✅ Normalize base64 — remove whitespace/newlines that corrupt decoding
+      final cleanBase64 = base64Str.replaceAll(RegExp(r'\s'), '');
+
+      final bytes = base64Decode(cleanBase64);
+      debugPrint('[SlidePreview] decoded ${bytes.length} bytes');
+
+      return Image.memory(
+        bytes,
+        fit:    BoxFit.cover,
+        width:  width,
+        height: height,
+        gaplessPlayback: true, // ✅ prevents flicker on rebuild
+        errorBuilder: (_, error, stack) {
+          debugPrint('[SlidePreview] Image.memory error: $error');
+          return _imagePlaceholder(Icons.broken_image, 'Decode error');
+        },
+      );
+    } catch (e) {
+      debugPrint('[SlidePreview] base64 decode exception: $e');
+      return _imagePlaceholder(Icons.broken_image, 'Error');
+    }
+  }
+
+  // ── file: URLs — Electron local file ─────────────────────────────────────
+  if (src.startsWith('file:')) {
+    debugPrint('[SlidePreview] file: URL — not accessible from Flutter');
+    return _imagePlaceholder(Icons.folder_off, 'Local file');
+  }
+
+  // ── http / https ──────────────────────────────────────────────────────────
+  if (src.startsWith('http:') || src.startsWith('https:')) {
+    debugPrint('[SlidePreview] http image: $src');
+    return Image.network(
+      src,
+      fit:    BoxFit.cover,
+      width:  width,
+      height: height,
+      gaplessPlayback: true,
+      loadingBuilder: (_, child, progress) {
+        if (progress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: progress.expectedTotalBytes != null
+              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+              : null,
+            strokeWidth: 1,
+            color: Colors.white30,
+          ),
+        );
+      },
+      errorBuilder: (_, error, __) {
+        debugPrint('[SlidePreview] Image.network error: $error');
+        return _imagePlaceholder(Icons.broken_image, 'Load error');
+      },
     );
   }
 
-  Widget _buildImageWidget(String? src) {
-    if (src == null || src.isEmpty) {
-      return Container(
-        color: Colors.grey.shade800,
-        child: const Icon(Icons.image, color: Colors.grey),
-      );
-    }
-    if (src.startsWith('data:image')) {
-      try {
-        final base64Str = src.split(',').last;
-        return Image.memory(
-          base64Decode(base64Str),
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: Colors.grey.shade800,
-            child: const Icon(Icons.broken_image, color: Colors.grey),
+  // ── Unknown URL scheme ────────────────────────────────────────────────────
+  debugPrint('[SlidePreview] unknown src scheme: ${src.substring(0, math.min(40, src.length))}');
+  return _imagePlaceholder(Icons.help_outline, 'Unknown URL');
+}
+
+// ── Reusable placeholder ──────────────────────────────────────────────────────
+Widget _imagePlaceholder(IconData icon, String label) {
+  return Container(
+    color: Colors.grey.shade900,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, color: Colors.grey.shade600, size: 16),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            color:    Colors.grey.shade600,
+            fontSize: 8,
           ),
-        );
-      } catch (_) {}
-    }
-    return Container(
-      color: Colors.grey.shade800,
-      child: const Icon(Icons.image, color: Colors.grey),
-    );
-  }
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
+}
 
   // ── Utilities ─────────────────────────────────────────────────────────────
   TextAlign _getTextAlign(String? align) {

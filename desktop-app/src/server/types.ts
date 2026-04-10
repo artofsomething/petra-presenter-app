@@ -41,6 +41,9 @@ export interface SlideElement {
     | 'topLeft' | 'topCenter' | 'topRight'
     | 'middleLeft' | 'middleCenter' | 'middleRight'
     | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
+  underline?:boolean;
+  lineHeight?:number;
+  listType?:'none' | 'bullet' | 'numbered';
 }
 
 // ... rest of types

@@ -1,4 +1,4 @@
-// src/renderer/components/Editor/TransitionControl.tsx
+
 import React, { useState } from 'react';
 import usePresentationStore from '../../store/usePresentation';
 import { TRANSITIONS } from '../../types/transitions';

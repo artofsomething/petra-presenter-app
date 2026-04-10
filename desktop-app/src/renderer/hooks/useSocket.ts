@@ -127,25 +127,19 @@ export function useSocket({ role, name, serverUrl }: UseSocketOptions) {
     });
 
     // ── sync-state ────────────────────────────────────────────────────────
-    socket.on('sync-state', (data: any) => {
+   socket.on('sync-state', (data: any) => {
       if (!mountedRef.current) return;
-      console.log(
-        '[useSocket] sync-state →',
-        `${data.presentation?.slides?.length ?? 0} slides,`,
-        `index: ${data.currentSlideIndex}`,
-      );
 
       const store = usePresentationStore.getState();
 
       if (roleRef.current === 'editor') {
-        // Editor only syncs slide index — never overwrites own presentation
         if (data.currentSlideIndex != null) {
           store.setCurrentSlideIndex(data.currentSlideIndex);
         }
         return;
       }
 
-      // ✅ Rewrite URLs for non-editor clients before loading
+      // ✅ Rewrite URLs for non-editor clients
       if (data.presentation) {
         const safe = safeRewrite(data.presentation);
         store.setPresentation(safe);
@@ -156,10 +150,26 @@ export function useSocket({ role, name, serverUrl }: UseSocketOptions) {
         const slideCount = freshState.presentation?.slides.length ?? 1;
         const safeIndex  = Math.max(0, Math.min(data.currentSlideIndex, slideCount - 1));
         store.setCurrentSlideIndex(safeIndex);
+
+        // ✅ Also update stage store for stage-display
+        if (roleRef.current === 'stage-display') {
+          const { stage } = usePresentationStore.getState();
+          if (stage.presentingFileId) {
+            store.stageSetSlide(stage.presentingFileId, safeIndex);
+            store.stageSetPresentingFile(stage.presentingFileId, safeIndex);
+          }
+        }
       }
 
       if (data.isBlackScreen != null) {
         if (store.isBlackScreen !== data.isBlackScreen) store.toggleBlackScreen();
+      }
+
+      // ✅ Sync presenting state for stage-display
+      if (roleRef.current === 'stage-display' && data.isPresenting != null) {
+        if (store.isPresenting !== data.isPresenting) {
+          store.setIsPresenting(data.isPresenting);
+        }
       }
     });
 
@@ -248,15 +258,36 @@ export function useSocket({ role, name, serverUrl }: UseSocketOptions) {
     });
 
     // ── slide-changed ─────────────────────────────────────────────────────
-    socket.on('slide-changed', (data: { index: number }) => {
+    socket.on('slide-changed', (data: { index: number; senderId?: string }) => {
       if (!mountedRef.current) return;
       console.log(`[useSocket] slide-changed → ${data.index}`);
+
+      // ✅ Always update the main store
       usePresentationStore.getState().setCurrentSlideIndex(data.index);
+
+      // ✅ If stage-display, ALSO update the stage store
+      if (roleRef.current === 'stage-display') {
+        const store = usePresentationStore.getState();
+        const { stage } = store;
+
+        // Only update if we're presenting and have a presenting file
+        if (stage.presentingFileId) {
+          store.stageSetSlide(stage.presentingFileId, data.index);
+          store.stageSetPresentingFile(stage.presentingFileId, data.index);
+          console.log(`[useSocket] stage-display: stageSetSlide → ${data.index}`);
+        }
+      }
     });
 
     // ── black-screen-toggled ──────────────────────────────────────────────
-    socket.on('black-screen-toggled', (value: boolean) => {
+    socket.on('black-screen-toggled', (data: any) => {
       if (!mountedRef.current) return;
+
+      // ✅ Handle both old (bool) and new ({value, senderId}) format
+      const value = typeof data === 'boolean' ? data : data?.value;
+      if (typeof value !== 'boolean') return;
+
+      console.log(`[useSocket] black-screen-toggled → ${value}`);
       const store = usePresentationStore.getState();
       if (store.isBlackScreen !== value) store.toggleBlackScreen();
     });
@@ -264,14 +295,35 @@ export function useSocket({ role, name, serverUrl }: UseSocketOptions) {
     // ── presentation-started ──────────────────────────────────────────────
     socket.on('presentation-started', (data: any) => {
       if (!mountedRef.current) return;
+      console.log('[useSocket] presentation-started received');
+
       if (data?.index != null) {
         usePresentationStore.getState().setCurrentSlideIndex(data.index);
+      }
+
+      // ✅ Update stage-display presenting state
+      if (roleRef.current === 'stage-display') {
+        const store = usePresentationStore.getState();
+        store.setIsPresenting(true);
+
+        if (data?.index != null && store.stage.presentingFileId) {
+          store.stageSetSlide(store.stage.presentingFileId, data.index);
+          store.stageSetPresentingFile(store.stage.presentingFileId, data.index);
+        }
+        console.log('[useSocket] stage-display: setIsPresenting(true)');
       }
     });
 
     // ── presentation-stopped ──────────────────────────────────────────────
-    socket.on('presentation-stopped', () => {
-      // handle if needed
+    socket.on('presentation-stopped', (data?: any) => {
+      if (!mountedRef.current) return;
+      console.log('[useSocket] presentation-stopped received');
+
+      // ✅ Update stage-display presenting state
+      if (roleRef.current === 'stage-display') {
+        usePresentationStore.getState().setIsPresenting(false);
+        console.log('[useSocket] stage-display: setIsPresenting(false)');
+      }
     });
 
     // ── pull-presentation ─────────────────────────────────────────────────

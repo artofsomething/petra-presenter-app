@@ -1,5 +1,3 @@
-// src/main/electron.ts
-// REPLACE ENTIRE FILE
 
 import { app, BrowserWindow, screen, ipcMain } from 'electron';
 import path from 'path';
