@@ -83,6 +83,43 @@ useEffect(() => {
   isConnected,
 ]);
 
+useEffect(() => {
+  if (!window.electronAPI?.onFileChanged) return;
+
+  const unsubscribe = window.electronAPI.onFileChanged(
+    async (changedPath: string) => {
+      // ✅ Find any loaded stage file that came from this path
+      const matchingFile = stage.files.find(
+        f => f.filePath === changedPath
+      );
+      if (!matchingFile) return;
+
+      console.log('[StageDisplay] File changed, reloading:', changedPath);
+
+      try {
+        const result = await window.electronAPI.readFile(changedPath);
+        if (result?.error || !result?.content) return;
+
+        const parsed = JSON.parse(result.content);
+        if (!isValidPresentation(parsed)) return;
+
+        // ✅ Reload the stage file keeping same id/name/index
+        stageLoadFile({
+          ...matchingFile,
+          presentation: parsed,
+        });
+
+        console.log('[StageDisplay] ✅ Auto-reloaded:', matchingFile.name);
+      } catch (err) {
+        console.error('[StageDisplay] Auto-reload failed:', err);
+      }
+    }
+  );
+
+  return () => unsubscribe?.();
+}, [stage.files, stageLoadFile]);
+
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -165,7 +202,33 @@ useEffect(() => {
   emitUpdatePresentation,
   stageSetPresentingFile,
 ]);
+const handleOpenInEditor = useCallback(async () => {
+  if (!activeFile) return;
 
+  if (!window.electronAPI?.openEditorWindow) {
+    alert('Open in Editor is only available in the desktop app.');
+    return;
+  }
+
+  try {
+    // ✅ Serialize current presentation to JSON
+    const content = JSON.stringify(activeFile.presentation, null, 2);
+
+    const result = await window.electronAPI.openEditorWindow({
+      filePath: activeFile.filePath,   // might be undefined if loaded via input
+      fileName: activeFile.name,
+      content,
+    });
+
+    if (result?.reused) {
+      console.log('[StageDisplay] Focused existing editor window');
+    } else {
+      console.log('[StageDisplay] Opened new editor window');
+    }
+  } catch (err) {
+    console.error('[StageDisplay] Failed to open editor:', err);
+  }
+}, [activeFile]);
   // ── Presentation control ──────────────────────────────────────────────────
   const handleStartPresentation = useCallback(async () => {
     if (!activeFile) {
@@ -291,7 +354,8 @@ useEffect(() => {
         id:           uuid(),
         name:         file.name.replace(/\.[^/.]+$/, ''),
         presentation,
-        activeSlideIndex:activeSlideIndex
+        activeSlideIndex:activeSlideIndex,
+        filePath:     undefined
       };
 
       stageLoadFile(stageFile);
@@ -364,7 +428,15 @@ useEffect(() => {
           >
             📂 Load File
           </button>
-
+          {activeFile && (
+            <button
+              onClick={handleOpenInEditor}
+              style={{ ...styles.btn, ...styles.btnPurple }}
+              title="Open current file in Editor window"
+            >
+              ✏️ Open in Editor
+            </button>
+          )}
           {/* Divider */}
           <div style={styles.divider} />
 

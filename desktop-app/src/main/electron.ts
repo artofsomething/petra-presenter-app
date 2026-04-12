@@ -1,7 +1,8 @@
 
-import { app, BrowserWindow, screen, ipcMain } from 'electron';
+import { app, BrowserWindow, screen, ipcMain,desktopCapturer, dialog } from 'electron';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { startWebSocketServer, getIO } from '../server/websocket-server';
 
 let mainWindow: BrowserWindow | null = null;
@@ -228,6 +229,22 @@ ipcMain.handle('set-selected-displays', (_e, ids: number[]) => {
   }
   return true;
 });
+ipcMain.handle('get-desktop-sources', async (_event, types) => {
+  const sources = await desktopCapturer.getSources({
+    types,
+    thumbnailSize: { width: 320, height: 180 }, // preview thumbnails
+    fetchWindowIcons: true,
+  });
+
+  // ✅ Return serializable data only
+  return sources.map(source => ({
+    id:        source.id,
+    name:      source.name,
+    thumbnail: source.thumbnail.toDataURL(), // base64 preview
+    appIcon:   source.appIcon?.toDataURL() ?? null,
+  }));
+});
+
 
 ipcMain.handle('set-presentation-resolution', (_e, w: number, h: number) => {
   slideWidth  = w;
@@ -263,6 +280,233 @@ function setupWebSocketBridge() {
     });
   });
 }
+
+ipcMain.handle('dialog:openFile', async (_e, filters?: Electron.FileFilter[]) => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters:    filters ?? [
+      { name: 'Presentation', extensions: ['json', 'petra'] },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const filePath = result.filePaths[0];
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return {
+      filePath,
+      fileName: path.basename(filePath),
+      content,
+    };
+  } catch (err: any) {
+    console.error('[main] openFile error:', err);
+    return { error: err.message };
+  }
+});
+
+// ── File: Save (overwrite OR save-as) ────────────────────────────────────
+ipcMain.handle('dialog:saveFile', async (_e, {
+  filePath,
+  content,
+  defaultName,
+}: {
+  filePath?:    string;
+  content:      string;
+  defaultName?: string;
+}) => {
+  try {
+    // ✅ filePath provided → overwrite directly, no dialog
+    if (filePath) {
+      fs.writeFileSync(filePath, content, 'utf-8');
+      console.log('[main] Saved:', filePath);
+      return { success: true, filePath };
+    }
+
+    // ✅ No filePath → show Save As dialog
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      defaultPath: defaultName ?? 'presentation.json',
+      filters:     [
+        { name: 'Presentation', extensions: ['json'] },
+      ],
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { canceled: true };
+    }
+
+    fs.writeFileSync(result.filePath, content, 'utf-8');
+    console.log('[main] Saved As:', result.filePath);
+    return { success: true, filePath: result.filePath };
+
+  } catch (err: any) {
+    console.error('[main] saveFile error:', err);
+    return { error: err.message };
+  }
+});
+
+// ── File: Read content ────────────────────────────────────────────────────
+ipcMain.handle('file:read', (_e, filePath: string) => {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { content };
+  } catch (err: any) {
+    console.error('[main] file:read error:', err);
+    return { error: err.message };
+  }
+});
+
+// ── File: Watch for changes ───────────────────────────────────────────────
+const fileWatchers = new Map<string, fs.FSWatcher>();
+
+ipcMain.handle('file:watch', (_e, filePath: string) => {
+  // ✅ Don't duplicate watchers
+  if (fileWatchers.has(filePath)) return true;
+
+  try {
+    // ✅ Debounce — fs.watch fires twice on some OS
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const watcher = fs.watch(filePath, (eventType) => {
+      if (eventType !== 'change') return;
+      if (debounceTimer) return;
+
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        // ✅ Notify ALL renderer windows
+        BrowserWindow.getAllWindows().forEach(win => {
+          if (!win.isDestroyed()) {
+            win.webContents.send('file:changed', filePath);
+          }
+        });
+        console.log('[main] File changed:', filePath);
+      }, 300);
+    });
+
+    watcher.on('error', (err) => {
+      console.error('[main] Watcher error:', err);
+      fileWatchers.delete(filePath);
+    });
+
+    fileWatchers.set(filePath, watcher);
+    console.log('[main] Watching:', filePath);
+    return true;
+  } catch (err: any) {
+    console.error('[main] file:watch error:', err);
+    return false;
+  }
+});
+
+ipcMain.handle('file:unwatch', (_e, filePath: string) => {
+  const watcher = fileWatchers.get(filePath);
+  if (watcher) {
+    watcher.close();
+    fileWatchers.delete(filePath);
+    console.log('[main] Unwatched:', filePath);
+  }
+  return true;
+});
+
+// src/main/index.ts
+
+const editorWindows = new Map<string, BrowserWindow>();
+
+const pendingEditorFilesByWindow = new Map<number, {
+  filePath?: string;
+  fileName?: string;
+  content:   string;
+}>();
+
+ipcMain.handle('open-editor-window', async (_e, args: {
+  filePath?: string;
+  fileName?: string;
+  content:   string;
+}) => {
+  // ✅ If already open for this file → just focus it
+  if (args.filePath && editorWindows.has(args.filePath)) {
+    const existing = editorWindows.get(args.filePath)!;
+    if (!existing.isDestroyed()) {
+      existing.focus();
+      return { success: true, reused: true };
+    }
+    editorWindows.delete(args.filePath);
+  }
+
+  const win = new BrowserWindow({
+    width:  1400,
+    height: 900,
+    title:  `Editor — ${args.fileName ?? 'Presentation'}`,
+    webPreferences: {
+      preload:          path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+    },
+  });
+
+  // ✅ FIX 1: Store BEFORE loadURL so it's ready when renderer requests it
+  // did-finish-load is too late — store immediately after window creation
+  pendingEditorFilesByWindow.set(win.webContents.id, args);
+
+  // ✅ FIX 2: Also inject via sessionStorage as backup
+  // dom-ready fires before React mounts, so sessionStorage will be ready
+  win.webContents.on('dom-ready', () => {
+    // ✅ FIX 3: Proper JSON escaping — use JSON.stringify inside the script
+    // instead of string interpolation which breaks on special chars
+    const safeData = JSON.stringify(JSON.stringify(args)); // double stringify
+    win.webContents.executeJavaScript(`
+      try {
+        sessionStorage.setItem('pendingEditorFile', ${safeData});
+        console.log('[Main] pendingEditorFile injected to sessionStorage');
+      } catch(e) {
+        console.error('[Main] sessionStorage inject failed:', e);
+      }
+    `).catch(console.error);
+  });
+
+  if (isDev) {
+    win.loadURL('http://localhost:5173/index.html#/editor');
+    win.webContents.openDevTools();
+  } else {
+    win.loadFile(
+      path.join(__dirname, '../renderer/index.html'),
+      { hash: '/editor' }
+    );
+  }
+
+  win.webContents.on('console-message', (_e, _level, msg) => {
+    console.log('[EditorWindow]', msg);
+  });
+
+  // ✅ FIX 4: Track window + cleanup pending data on close
+  if (args.filePath) {
+    editorWindows.set(args.filePath, win);
+  }
+
+  win.on('closed', () => {
+    // ✅ FIX 5: Clean up by webContents.id (not transferId which doesn't exist)
+    pendingEditorFilesByWindow.delete(win.webContents.id);
+    if (args.filePath) {
+      editorWindows.delete(args.filePath);
+    }
+  });
+
+  return { success: true, reused: false };
+});
+
+// ✅ FIX 6: Use correct parameter name 'event' not '_e'
+ipcMain.handle('get-pending-editor-file', (event) => {
+  const id   = event.sender.id;
+  const data = pendingEditorFilesByWindow.get(id);
+
+  if (data) {
+    pendingEditorFilesByWindow.delete(id); // ✅ consume once
+    console.log('[Main] Served pending file to window:', id);
+    return data;
+  }
+
+  console.log('[Main] No pending file for window:', id);
+  return null;
+});
 
 app.whenReady().then(async () => {
   const wsPort = 8765;

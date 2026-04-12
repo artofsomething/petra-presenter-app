@@ -17,6 +17,7 @@ import type { GradientConfig} from '../../../server/types';
 import AnimatedBackgroundComponent from './AnimatedBackground';
 import { useSnapGuides} from '../../hooks/useSnapGuides';
 import SnapGuideLines from './SnapGuideLines';
+import ScreenCaptureElement from '../Advanced/ScreenCaptureElement';
 
 
 
@@ -274,6 +275,7 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
         width:    newWidth,
         height:   newHeight,
         rotation: node.rotation(),
+        ...updates
       });
     },
     [editable, currentSlideIndex, updateElement]
@@ -580,6 +582,19 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
             onTransformEnd={(e) => handleTransformEnd(e, element)}
           />
         );
+        case 'screen-capture':
+          return (
+            <ScreenCaptureElement
+              key={element.id}
+              element={element}
+              scale={SCALE}
+              isEditor={editable}
+              onSelect={(e) => handleElementSelect(e, element.id)}
+              onDragEnd={(e) => handleDragEnd(e, element)}
+              onDragMove={(e) => handleDragMove(e, element)}
+              onTransformEnd={(e) => handleTransformEnd(e, element)}
+            />
+          );
       default:
         return null;
     }

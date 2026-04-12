@@ -65,6 +65,9 @@ interface PresentationState {
   stageSetSlide: (fileId:string, slideIndex: number)=>void;
   stageClear: ()=>void;
   stageSetPresentingFile: (fileId: string | null,slideIndex?:number) => void; // ✅ 
+
+  openedFilePath:string | null;
+  setOpenedFilePath: (path:string|null)=>void;
 }
 
 const createDefaultSlide = (order: number): Slide => ({
@@ -86,6 +89,8 @@ const usePresentationStore = create<PresentationState>((set, get) => ({
   isPresenting: false,
   isBlackScreen: false,
 
+  openedFilePath:null,
+  setOpenedFilePath: (path) => set({ openedFilePath: path }),
   createNewPresentation: (name: string) => {
     const presentation: Presentation = {
       id: uuidv4(),
@@ -99,7 +104,7 @@ const usePresentationStore = create<PresentationState>((set, get) => ({
         defaultTransition: 'fade',
       },
     };
-    set({ presentation, currentSlideIndex: 0 });
+    set({ presentation, currentSlideIndex: 0 ,openedFilePath:null});
   },
 
 updateSlideBackground: (updates: {
@@ -473,7 +478,7 @@ addSlides: (newSlides: GeneratedSlide[], index?: number) => {
   loadFromJSON: (json: string) => {
     try {
       const presentation = JSON.parse(json) as Presentation;
-      set({ presentation, currentSlideIndex: 0 });
+      set({ presentation, currentSlideIndex: 0,openedFilePath:null });
     } catch (error) {
       console.error('Failed to parse JSON:', error);
     }

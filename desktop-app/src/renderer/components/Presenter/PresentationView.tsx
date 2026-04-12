@@ -16,6 +16,7 @@ import type { TransitionType } from '../../types/transitions';
 import { resolveAlignment } from '../../utils/alignmentUtils';
 import { formatDisplayText } from '../../utils/textFormatter';
 import { getRenderedLines, } from '../../utils/underlineUtils';
+import PresentationScreenCapture from '../Advanced/PresenterScreenCapture';
 
 // ── Image cache ───────────────────────────────────────────────────────────────
 const presentationImageCache = new Map<string, HTMLImageElement>();
@@ -607,6 +608,7 @@ const PresentationElement: React.FC<{ element: SlideElement }> = ({ element }) =
     case 'shape': return <PresentationShape element={element} />;
     case 'image': return <PresentationImage element={element} />;
     case 'video': return <PresentationVideo element={element} />;
+    case 'screen-capture': return <PresentationScreenCapture element={element} />; // ✅ ADD
     default:      return null;
   }
 };

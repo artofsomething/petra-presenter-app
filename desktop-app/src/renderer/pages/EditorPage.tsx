@@ -20,6 +20,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../components/MobileEditor/MobileSl
 import BackButton from '../components/Shared/BackButton';
 import SlideGeneratorModal from '../components/Editor/SlideGeneratorModal';
 import type { GeneratedSlide } from '../utils/slideGenerator';
+import AppCapturePicker from '../components/Advanced/AppCapturePicker';
 
 // ── New Presentation Modal ────────────────────────────────────────────────────
 const NewPresentationModal: React.FC<{
@@ -404,7 +405,7 @@ const EditorPage: React.FC = () => {
     presentation, currentSlideIndex,
     createNewPresentation, saveToJSON, loadFromJSON, setIsPresenting,
     selectedElementId, copyElement, toggleLockElement,
-    addSlide, addElement,
+    addSlide, addElement, setOpenedFilePath,openedFilePath
   } = usePresentationStore();
 
   const [showConnection,       setShowConnection]       = useState(false);
@@ -431,18 +432,41 @@ const EditorPage: React.FC = () => {
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [assetTarget, setAssetTarget] = useState<'image' | 'video' | 'bgImage' | 'bgVideo'>('image');
   const [showGenerator, setShowGenerator] = useState(false);
+  const [showCapturePicker, setShowCapturePicker] = useState(false);
 
+  const handleGenerateSlides = useCallback((newSlides: GeneratedSlide[]) => {
+    // Capture current count BEFORE adding
+    const beforeCount = usePresentationStore.getState().presentation?.slides.length ?? 0;
 
-const handleGenerateSlides = useCallback((newSlides: GeneratedSlide[]) => {
-  // Capture current count BEFORE adding
-  const beforeCount = usePresentationStore.getState().presentation?.slides.length ?? 0;
+    usePresentationStore.getState().addSlides(newSlides);
 
-  usePresentationStore.getState().addSlides(newSlides);
+    // Now jump to the first new slide
+    usePresentationStore.getState().setCurrentSlideIndex(beforeCount);
+  }, []);
 
-  // Now jump to the first new slide
-  usePresentationStore.getState().setCurrentSlideIndex(beforeCount);
-}, []);
-  
+  const handleCaptureSelect = useCallback(async (sourceId: string, sourceName: string) => {
+    setShowCapturePicker(false);
+
+    const state  = usePresentationStore.getState();
+    const idx    = state.currentSlideIndex;
+    const slide  = state.presentation?.slides[idx];
+    const zIndex = slide?.elements.length ?? 0;
+
+    state.addElement(idx, {
+      id:         `el_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      type:       'screen-capture' as any,
+      sourceId,
+      sourceName,
+      x:          160,
+      y:          90,
+      width:      1600,
+      height:     900,
+      rotation:   0,
+      opacity:    1,
+      zIndex,
+      isLocked:   false,
+    } as any);
+  }, []);
   const handleAssetSelect = useCallback(async (asset: AssetItem) => {
     const state = usePresentationStore.getState();
     const idx   = state.currentSlideIndex;
@@ -527,10 +551,60 @@ const handleGenerateSlides = useCallback((newSlides: GeneratedSlide[]) => {
   },[]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!presentation) createNewPresentation('Untitled Presentation');
-  }, []);
- 
+  // useEffect(() => {
+  //   if (!presentation) createNewPresentation('Untitled Presentation');
+  // }, []);
+useEffect(() => {
+  const initEditor = async () => {
+
+    // ✅ APPROACH 1: IPC pull (most reliable — stored before loadURL)
+    if (window.electronAPI?.getPendingEditorFile) {
+      try {
+        const pending = await window.electronAPI.getPendingEditorFile();
+        if (pending?.content) {
+          console.log('[Editor] Loading from IPC:', pending.fileName);
+          loadFromJSON(pending.content);
+          if (pending.filePath) {
+            setOpenedFilePath(pending.filePath);
+            window.electronAPI?.watchFile?.(pending.filePath);
+          }
+          return; // ✅ Stop here — don't create empty presentation
+        }
+      } catch (err) {
+        console.error('[Editor] IPC pull failed:', err);
+      }
+    }
+
+    // ✅ APPROACH 2: sessionStorage fallback
+    const pendingRaw = sessionStorage.getItem('pendingEditorFile');
+    if (pendingRaw) {
+      sessionStorage.removeItem('pendingEditorFile');
+      try {
+        const pending = JSON.parse(pendingRaw);
+        if (pending?.content) {
+          console.log('[Editor] Loading from sessionStorage:', pending.fileName);
+          loadFromJSON(pending.content);
+          if (pending.filePath) {
+            setOpenedFilePath(pending.filePath);
+            window.electronAPI?.watchFile?.(pending.filePath);
+          }
+          return; // ✅ Stop here
+        }
+      } catch (err) {
+        console.error('[Editor] sessionStorage parse failed:', err);
+      }
+    }
+
+    // ✅ APPROACH 3: Nothing pending → create new presentation
+    if (!presentation) {
+      console.log('[Editor] No pending file — creating new presentation');
+      createNewPresentation('Untitled Presentation');
+    }
+  };
+
+  initEditor();
+}, []); // ✅ Run once on mount only
+
   
   // ── Sync helpers ──────────────────────────────────────────────────────────
   const lastSentJsonRef = useRef<string>('');
@@ -730,21 +804,131 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
     }, [addSlide, addElement]);
 
   // ── File operations ───────────────────────────────────────────────────────
-  const handleSave = () => {
-    const json = saveToJSON();
-    const blob = new Blob([json], { type: 'application/json' });
+  const handleSave = useCallback(async () => {
+  if (!presentation) return;
+
+  const content = saveToJSON();
+
+  if (window.electronAPI?.saveFileDialog) {
+    const result = await window.electronAPI.saveFileDialog({
+      filePath:    openedFilePath ?? undefined, // ✅ overwrite if known
+      content,
+      defaultName: `${presentation.name || 'presentation'}.json`,
+    });
+
+    if (!result)           return;
+    if (result.canceled)   return;
+    if (result.error) {
+      alert(`Save failed: ${result.error}`);
+      return;
+    }
+    if (!result.filePath)  return;
+
+      // ✅ Remember path for future Ctrl+S
+      setOpenedFilePath(result.filePath);
+
+      // ✅ Sync to Stage Display + Presentation View via WebSocket
+      if (isConnected) {
+        lastSentJsonRef.current = ''; // force re-sync
+        emitUpdatePresentation(presentation, currentSlideIndex);
+      
+
+      console.log('[Editor] Saved:', result.filePath);
+    } else if (result?.error) {
+      alert(`Save failed: ${result.error}`);
+    }
+    // result?.canceled → user dismissed, do nothing
+
+  } else {
+    // ✅ Browser fallback (non-Electron)
+    const blob = new Blob([content], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `${presentation?.name || 'presentation'}.json`;
+    a.download = `${presentation.name || 'presentation'}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }
+}, [
+  presentation,
+  openedFilePath,
+  saveToJSON,
+  setOpenedFilePath,
+  isConnected,
+  emitUpdatePresentation,
+  currentSlideIndex,
+]);
 
-  const handleLoad = () => {
+// ── Add handleSaveAs (always shows dialog) ────────────────────────────────
+const handleSaveAs = useCallback(async () => {
+  if (!presentation) return;
+
+  const content = saveToJSON();
+
+  if (window.electronAPI?.saveFileDialog) {
+    // ✅ Force dialog by NOT passing filePath
+    const result = await window.electronAPI.saveFileDialog({
+      content,
+      defaultName: `${presentation.name || 'presentation'}.json`,
+    });
+    if (!result)           return;
+    if (result.canceled)   return;
+    if (result.error) {
+      alert(`Save failed: ${result.error}`);
+      return;
+    }
+    if (!result.filePath)  return;
+
+    if (result?.success) {
+      setOpenedFilePath(result.filePath);
+      if (isConnected) {
+        lastSentJsonRef.current = '';
+        emitUpdatePresentation(presentation, currentSlideIndex);
+      }
+      console.log('[Editor] Saved As:', result.filePath);
+    } else if (result?.error) {
+      alert(`Save failed: ${result.error}`);
+    }
+  }
+}, [
+  presentation,
+  saveToJSON,
+  setOpenedFilePath,
+  isConnected,
+  emitUpdatePresentation,
+  currentSlideIndex,
+]);
+const handleLoad = useCallback(async () => {
+  if (window.electronAPI?.openFileDialog) {
+    // ✅ Electron: native dialog with path tracking
+    const result = await window.electronAPI.openFileDialog([
+      { name: 'Presentation', extensions: ['json', 'petra'] },
+    ]);
+
+    if (!result)          return;
+    if (result.error) {
+      alert(`Open failed: ${result.error}`);
+      return;
+    }
+    if (!result.content || !result.filePath) return;
+
+    try {
+      loadFromJSON(result.content);
+      setOpenedFilePath(result.filePath);
+
+      // ✅ Watch file for external changes (Stage Display sync)
+      await window.electronAPI.watchFile?.(result.filePath);
+
+      console.log('[Editor] Opened:', result.filePath);
+    } catch {
+      alert('Failed to parse presentation file.');
+    }
+
+  } else {
+    // ✅ Browser fallback
     const input    = document.createElement('input');
     input.type     = 'file';
-    input.accept   = '.json';
+    input.accept   = '.json,.petra';
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -753,7 +937,8 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
       reader.readAsText(file);
     };
     input.click();
-  };
+  }
+}, [loadFromJSON, setOpenedFilePath]);
 
   // ── Presentation control ──────────────────────────────────────────────────
   const handleStartPresentation = async () => {
@@ -772,6 +957,62 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
     emitStopPresentation();
   };
 
+  useEffect(() => {
+    if (!window.electronAPI?.onLoadFileInEditor) return;
+
+    const unsubscribe = window.electronAPI.onLoadFileInEditor((data) => {
+      console.log('[Editor] Loading file from Stage Display:', data.fileName);
+
+      try {
+        loadFromJSON(data.content);
+
+        // ✅ Remember the file path so Ctrl+S overwrites correctly
+        if (data.filePath) {
+          setOpenedFilePath(data.filePath);
+          // ✅ Watch for external changes
+          window.electronAPI?.watchFile?.(data.filePath);
+        }
+
+        console.log('[Editor] ✅ File loaded:', data.fileName);
+      } catch (err) {
+        console.error('[Editor] Failed to load file:', err);
+        alert('Failed to load presentation file.');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [loadFromJSON, setOpenedFilePath]);
+const autoSaveTimerRef = useRef<number | null>(null);
+
+useEffect(() => {
+  if (!openedFilePath || !presentation || !isConnected) return;
+
+  // ✅ Debounced auto-save to disk when editing
+  if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+
+  autoSaveTimerRef.current = window.setTimeout(async () => {
+    if (!window.electronAPI?.saveFileDialog) return;
+
+    const content = saveToJSON();
+    const result  = await window.electronAPI.saveFileDialog({
+      filePath: openedFilePath,
+      content,
+    });
+
+    if (result?.success) {
+      console.log('[Editor] Auto-saved to:', openedFilePath);
+      // ✅ fs.watch detects change → Stage Display auto-reloads
+    }
+  }, 2000); // 2s debounce
+
+  return () => {
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+  };
+}, [
+  presentation?.slides.length,
+  JSON.stringify(presentation?.slides.map(s => s.elements)),
+  openedFilePath,
+]);
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -779,7 +1020,7 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
-          case 's': e.preventDefault(); handleSave(); break;
+          case 's': e.preventDefault();if(e.shiftKey)handleSaveAs();else handleSave(); break;
           case 'o': e.preventDefault(); handleLoad(); break;
           case 'd': e.preventDefault(); if (selectedElementId) copyElement(selectedElementId); break;
           case 'l': e.preventDefault(); if (selectedElementId) toggleLockElement(selectedElementId); break;
@@ -846,13 +1087,21 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
           }`}>
             {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
           </span>
-
+            {openedFilePath && (
+              <span
+                className="text-[10px] text-gray-500 truncate max-w-[160px]"
+                title={openedFilePath}
+              >
+                📄 {openedFilePath.split(/[\\/]/).pop()}
+              </span>
+            )}
           <span className="text-[10px] text-gray-500">
             {presentation?.slides.length ?? 0} slides
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+         
           <button onClick={()=> setShowGenerator(true)}
           className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
           title="Generate slides from text"
@@ -867,7 +1116,7 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
             >
             📄 New
             </button>
-          <HeaderDropdown
+          {/* <HeaderDropdown
             label="Save"
             emoji="💾"
             className="bg-gray-700 hover:bg-gray-600 text-white"
@@ -885,6 +1134,34 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
                 onClick: handleSaveArchive,
                 },
             ]}
+            /> */}
+
+            <HeaderDropdown
+              label={openedFilePath ? 'Save' : 'Save'}
+              emoji="💾"
+              className="bg-gray-700 hover:bg-gray-600 text-white"
+              items={[
+                {
+                  emoji:   '💾',
+                  label:   openedFilePath ? 'Save' : 'Save as JSON',
+                  desc:    openedFilePath
+                    ? `Overwrite: ${openedFilePath.split(/[\\/]/).pop()}`
+                    : 'Save as new .json file',
+                  onClick: handleSave,
+                },
+                {
+                  emoji:   '📝',
+                  label:   'Save As…',
+                  desc:    'Save to a different location',
+                  onClick: handleSaveAs,
+                },
+                {
+                  emoji:   '📦',
+                  label:   'Save as Archive',
+                  desc:    'Includes all images & videos (.preszip)',
+                  onClick: handleSaveArchive,
+                },
+              ]}
             />
 
         <HeaderDropdown
@@ -957,6 +1234,13 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
             }
           >
               📁 {selectedElement?.type === 'image' ? 'Replace Image' : 'Asset Library'}
+        </button>
+        <button
+          onClick={() => setShowCapturePicker(true)}
+          className="px-3 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
+          title="Capture a window or screen"
+        >
+          📺 Capture
         </button>
         </div>
       </header>
@@ -1124,6 +1408,13 @@ const handleAddSlideWithLayout = useCallback((layout: SlideLayout) => {
           currentSlideCount={presentation?.slides.length??0}
           onGenerate={handleGenerateSlides}
           onClose={() => setShowGenerator(false)}
+        />
+        
+      )}
+      {showCapturePicker && (
+        <AppCapturePicker
+          onSelect={handleCaptureSelect}
+          onClose={() => setShowCapturePicker(false)}
         />
       )}
     </div>

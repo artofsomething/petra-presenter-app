@@ -2,7 +2,7 @@
 // src/server/types.ts (or src/types/slide.ts)
 export interface SlideElement {
   id: string;
-  type: 'text' | 'shape' | 'image' | 'video';
+  type: 'text' | 'shape' | 'image' | 'video' | 'screen-capture';
   x: number;
   y: number;
   width: number;
@@ -21,7 +21,7 @@ export interface SlideElement {
   shadowBlur?: number;
   shadowOffsetX?: number;
   shadowOffsetY?: number;
-  shapeType?: 'rect' | 'circle' | 'ellipse' | 'triangle' | 'star' | 'arrow' | 'rounded-rect';
+  shapeType?: 'rect' | 'circle' | 'ellipse' | 'triangle' | 'star' | 'arrow' | 'rounded-rect' ;
   fill?: string;
   stroke?: string;
   src?: string;
@@ -44,6 +44,8 @@ export interface SlideElement {
   underline?:boolean;
   lineHeight?:number;
   listType?:'none' | 'bullet' | 'numbered';
+  sourceId?:string;
+  sourceName?:string;
 }
 
 // ... rest of types
@@ -167,6 +169,7 @@ export interface StageFile{
   name:         string;
   presentation: Presentation;
   activeSlideIndex : number;
+  filePath?:    string;
 }
 
 export interface StageDisplay{
@@ -174,4 +177,18 @@ export interface StageDisplay{
   activeFileId:     string | null;
   presentingFileId: string | null;
   presentingSlideIndex:number;
+}
+
+interface ScreenCaptureElement {
+  type:       'screen-capture';
+  id:         string;
+  x:          number;
+  y:          number;
+  width:      number;
+  height:     number;
+  rotation?:  number;
+  opacity?:   number;
+  sourceId:   string;       // desktopCapturer source ID
+  sourceName: string;       // display name
+  frameRate?: number;       // default 30
 }

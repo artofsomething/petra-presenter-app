@@ -12,6 +12,7 @@ import BackgroundImageLayer  from '../Editor/BackgroundImageLayer';
 import AnimatedBackgroundComponent from '../Editor/AnimatedBackground';
 import EditableText    from '../Editor/EditableText';
 import { gradientToKonvaPoints } from '../Editor/GradientPicker';
+import StageScreenCapture from '../Advanced/StageScreenCapture';
 
 const CANVAS_WIDTH  = 960;
 const CANVAS_HEIGHT = 540;
@@ -165,6 +166,7 @@ const StageSlideCanvas: React.FC<StageSlideCanvasProps> = ({
             key={element.id}
             element={element}
             scale={scale}
+            lineHeight={element.lineHeight??1.2}
             isSelected={false}
             editable={false}
             onSelect={() => {}}
@@ -200,6 +202,14 @@ const StageSlideCanvas: React.FC<StageSlideCanvasProps> = ({
             onDragEnd={() => {}}
             onDragMove={() => {}}
             onTransformEnd={() => {}}
+          />
+        );
+       case 'screen-capture':
+        return (
+          <StageScreenCapture
+            key={element.id}
+            element={element}
+            scale={scale}
           />
         );
       default:

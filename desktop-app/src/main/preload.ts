@@ -1,6 +1,6 @@
 // src/main/preload.ts — REPLACE ENTIRE FILE
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, desktopCapturer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // ── Display info ──────────────────────────────────────
@@ -50,4 +50,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRemoteStopped: (cb: () => void) => {
     ipcRenderer.on('remote-presentation-stopped', cb);
   },
+
+  getDesktopSources: async (types: Array<'window' | 'screen'>) => {
+    return await ipcRenderer.invoke('get-desktop-sources', types);
+  },
+    openFileDialog: (filters?: { name: string; extensions: string[] }[]) =>
+    ipcRenderer.invoke('dialog:openFile', filters),
+
+  saveFileDialog: (args: {
+    filePath?:    string;
+    content:      string;
+    defaultName?: string;
+  }) => ipcRenderer.invoke('dialog:saveFile', args),
+
+  readFile: (filePath: string) =>
+    ipcRenderer.invoke('file:read', filePath),
+
+  watchFile: (filePath: string) =>
+    ipcRenderer.invoke('file:watch', filePath),
+
+  unwatchFile: (filePath: string) =>
+    ipcRenderer.invoke('file:unwatch', filePath),
+
+  // ✅ Listen for file changes from main process
+  onFileChanged: (callback: (filePath: string) => void) => {
+    const handler = (_e: any, filePath: string) => callback(filePath);
+    ipcRenderer.on('file:changed', handler);
+    // ✅ Return unsubscribe function
+    return () => ipcRenderer.removeListener('file:changed', handler);
+  },
+  openEditorWindow: (args: {
+  filePath?: string;
+  fileName?: string;
+  content:   string;
+}) => ipcRenderer.invoke('open-editor-window', args),
+
+// ✅ Listen for file load request from main
+onLoadFileInEditor: (callback: (data: {
+  filePath?: string;
+  fileName?: string;
+  content:   string;
+}) => void) => {
+  const handler = (_e: any, data: any) => callback(data);
+  ipcRenderer.on('load-file-in-editor', handler);
+  return () => ipcRenderer.removeListener('load-file-in-editor', handler);
+},
+getPendingEditorFile: () =>
+  ipcRenderer.invoke('get-pending-editor-file'),
 });
