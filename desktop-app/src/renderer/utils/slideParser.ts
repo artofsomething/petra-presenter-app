@@ -1,85 +1,110 @@
 // src/renderer/utils/slideParser.ts
 
 export interface ParsedSlide {
-  title?:   string;
-  content?: string;
+  title?:    string;
+  contents:  string[];   // ← was content?: string, now array of blocks
 }
 
-// ── Extract text between two tags ─────────────────────────────────────────────
-function extractTag(text: string, tag: string): string | undefined {
-  const open  = `[${tag}]`;
-  const close = `[/${tag}]`;
-
-  const start = text.toLowerCase().indexOf(open.toLowerCase());
-  if (start === -1) return undefined;
-
-  const contentStart = start + open.length;
-  const end = text.toLowerCase().indexOf(close.toLowerCase(), contentStart);
-  if (end === -1) return undefined;
-
-  return text.substring(contentStart, end).trim() || undefined;
-}
-
-// ── Split into [slide] blocks ─────────────────────────────────────────────────
-function splitSlideBlocks(input: string): string[] {
-  const blocks: string[] = [];
-  const lower = input.toLowerCase();
-
-  const openTag  = '[slide]';
-  const closeTag = '[/slide]';
-
-  let searchFrom = 0;
-
-  while (true) {
-    const openIdx = lower.indexOf(openTag, searchFrom);
-    if (openIdx === -1) break;
-
-    const contentStart = openIdx + openTag.length;
-    const closeIdx = lower.indexOf(closeTag, contentStart);
-
-    if (closeIdx === -1) {
-      // Unclosed [slide] — grab everything to end
-      const block = input.substring(contentStart).trim();
-      if (block) blocks.push(block);
-      break;
-    }
-
-    const block = input.substring(contentStart, closeIdx).trim();
-    if (block) blocks.push(block);
-
-    searchFrom = closeIdx + closeTag.length;
-  }
-
-  return blocks;
-}
-
-// ── Main parser ───────────────────────────────────────────────────────────────
+/**
+ * Syntax:
+ *
+ *   # Title              ← optional
+ *   First content block
+ *   - bullet
+ *
+ *   --                   ← new content block (within same slide)
+ *   Second block
+ *
+ *   ---                  ← new slide
+ *
+ *   # Next Slide
+ *   Content
+ *   --
+ *   Another block
+ */
 export function parseSlideMarkup(input: string): ParsedSlide[] {
-  if (!input || !input.trim()) return [];
+  if (!input?.trim()) return [];
 
-  // Normalize line endings
   const normalized = input
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n');
 
-  const blocks = splitSlideBlocks(normalized);
+  // ── Split into slide blocks on --- (3+ dashes) ────────────────────────────
+  const slideBlocks = normalized
+    .split(/^---+\s*$/m)
+    .map(b => b.trim())
+    .filter(b => b.length > 0);
 
-  console.log('[parseSlideMarkup] blocks found:', blocks.length);
-  blocks.forEach((b, i) => console.log(`Block ${i}:`, b.substring(0, 80)));
+  console.log('[parseSlideMarkup] slide blocks:', slideBlocks.length);
 
-  const slides: ParsedSlide[] = [];
+  return slideBlocks
+    .map((block, i) => parseBlock(block, i))
+    .filter(s => s.title || s.contents.length > 0);
+}
 
-  for (const block of blocks) {
-    const title   = extractTag(block, 'title');
-    const content = extractTag(block, 'content');
+// ── Parse one slide block ─────────────────────────────────────────────────────
+function parseBlock(block: string, index: number): ParsedSlide {
+  // Split on -- (2 dashes, NOT 3) to get content sections
+  // (?<!-) negative lookbehind so --- doesn't match
+  const sections = block
+    .split(/^--(?!-)\s*$/m)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
 
-    console.log('[parseSlideMarkup] title:', title);
-    console.log('[parseSlideMarkup] content:', content?.substring(0, 40));
+  let title: string | undefined;
+  const contents: string[] = [];
 
-    if (title || content) {
-      slides.push({ title, content });
+  for (let si = 0; si < sections.length; si++) {
+    const lines = sections[si]
+      .split('\n')
+      .map(l => l.trimEnd());
+
+    // Only the FIRST section can contain the title (#)
+    if (si === 0) {
+      const titleLineIdx = lines.findIndex(l => l.startsWith('# '));
+      if (titleLineIdx !== -1) {
+        title = lines[titleLineIdx].slice(2).trim() || undefined;
+        // Remove title line, keep rest as content
+        lines.splice(titleLineIdx, 1);
+      }
     }
+
+    // Trim blank lines from edges
+    while (lines.length > 0 && !lines[0].trim())        lines.shift();
+    while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+
+    const content = lines.join('\n').trim();
+    if (content) contents.push(content);
   }
 
-  return slides;
+  console.log(
+    `[parseSlideMarkup] block ${index} — title: "${title}" blocks: ${contents.length}`
+  );
+
+  return { title, contents };
+}
+
+// ── Legacy migration ──────────────────────────────────────────────────────────
+export function migrateLegacyMarkup(input: string): string {
+  const legacySlide = /$$slide$$([\s\S]*?)$$\/slide$$/gi;
+  const blocks: string[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = legacySlide.exec(input)) !== null) {
+    const block   = match[1];
+    const title   = extractLegacyTag(block, 'title');
+    const content = extractLegacyTag(block, 'content');
+
+    const lines: string[] = [];
+    if (title)   lines.push(`# ${title}`);
+    if (content) lines.push(content);
+    blocks.push(lines.join('\n'));
+  }
+
+  return blocks.join('\n\n---\n\n');
+}
+
+function extractLegacyTag(text: string, tag: string): string | undefined {
+  const re = new RegExp(`\$$${tag}\$$([\\s\\S]*?)\$$\\/${tag}\$$`, 'i');
+  return text.match(re)?.[1]?.trim() || undefined;
 }

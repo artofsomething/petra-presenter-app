@@ -40,6 +40,7 @@ const StageDisplay: React.FC = () => {
     isBlackScreen,
     setIsPresenting,
     stageLoadFile,
+    stageUpdateFile,
     stageRemoveFile,
     stageSetActiveFile,
     stageSetSlide,
@@ -88,13 +89,8 @@ useEffect(() => {
 
   const unsubscribe = window.electronAPI.onFileChanged(
     async (changedPath: string) => {
-      // ✅ Find any loaded stage file that came from this path
-      const matchingFile = stage.files.find(
-        f => f.filePath === changedPath
-      );
+      const matchingFile = stage.files.find(f => f.filePath === changedPath);
       if (!matchingFile) return;
-
-      console.log('[StageDisplay] File changed, reloading:', changedPath);
 
       try {
         const result = await window.electronAPI.readFile(changedPath);
@@ -103,8 +99,8 @@ useEffect(() => {
         const parsed = JSON.parse(result.content);
         if (!isValidPresentation(parsed)) return;
 
-        // ✅ Reload the stage file keeping same id/name/index
-        stageLoadFile({
+        // ✅ use stageUpdateFile
+        stageUpdateFile({
           ...matchingFile,
           presentation: parsed,
         });
@@ -117,7 +113,7 @@ useEffect(() => {
   );
 
   return () => unsubscribe?.();
-}, [stage.files, stageLoadFile]);
+}, [stage.files, stageUpdateFile]);  // ✅ updated dep
 
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
@@ -268,7 +264,7 @@ const handleOpenInEditor = useCallback(async () => {
     stageSetPresentingFile,
     setIsPresenting,
   ]);
-
+  const isReloadRef = useRef<boolean>(false);
 
     const handleStopPresentation = useCallback(async () => {
     try {
@@ -312,60 +308,124 @@ const handleOpenInEditor = useCallback(async () => {
   }
 
   // ── File loader ───────────────────────────────────────────────────────────
+
+  // ── Reload active file ────────────────────────────────────────────────────
+const handleReloadFile = useCallback(async () => {
+  if (!activeFile) return;
+  setError(null);
+
+  if (activeFile.filePath && window.electronAPI?.readFile) {
+    setLoading({ filename: activeFile.name, progress: 50 });
+    try {
+      const result = await window.electronAPI.readFile(activeFile.filePath);
+
+      if (result?.error || !result?.content) {
+        setError(`Reload failed: ${result?.error ?? 'empty response'}`);
+        return;
+      }
+
+      let presentation: Presentation;
+      try {
+        presentation = JSON.parse(result.content);
+      } catch {
+        setError('Reload failed: invalid JSON in file.');
+        return;
+      }
+
+      if (!isValidPresentation(presentation)) {
+        setError('Reload failed: file is not a valid presentation.');
+        return;
+      }
+
+      // ✅ stageUpdateFile replaces presentation in-place — no early-return bug
+      stageUpdateFile({
+        ...activeFile,
+        presentation,
+      });
+
+      console.log('[StageDisplay] ✅ Reloaded:', activeFile.name,
+        presentation.slides.length, 'slides');
+
+    } catch (err: any) {
+      setError(err?.message ?? 'Reload failed.');
+      console.error('[StageDisplay] Reload error:', err);
+    } finally {
+      setLoading(null);
+    }
+    return;
+  }
+
+  // No path: re-open file picker
+  isReloadRef.current = true;
+  fileInputRef.current?.click();
+}, [activeFile, stageUpdateFile]);
+
   const handleLoadFile = useCallback(() => {
     setError(null);
     fileInputRef.current?.click();
   }, []);
 
   const onFileSelected = useCallback(async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setError(null);
+  e: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  e.target.value = '';
+  setError(null);
 
-    try {
-      let presentation: Presentation;
-      const isPreszip = file.name.toLowerCase().endsWith('.preszip');
+  const isReload = isReloadRef.current;
+  isReloadRef.current = false;          // reset immediately
 
-      if (isPreszip) {
-        setLoading({ filename: file.name, progress: 0 });
-        presentation = await loadFromArchive(file, (pct) => {
-          setLoading({ filename: file.name, progress: pct });
-        });
-        setLoading(null);
+  try {
+    let presentation: Presentation;
+    const isPreszip = file.name.toLowerCase().endsWith('.preszip');
 
-        if (!isValidPresentation(presentation)) {
-          setError('Invalid .preszip — missing required presentation data.');
-          return;
-        }
-      } else {
-        const json = await readFileAsJson(file);
-        if (!json) { setError('Could not read file.'); return; }
-        if (!isValidPresentation(json)) {
-          setError('Invalid file. Must be a valid .petra or .json file.');
-          return;
-        }
-        presentation = json;
-      }
-
-      const stageFile: StageFile = {
-        id:           uuid(),
-        name:         file.name.replace(/\.[^/.]+$/, ''),
-        presentation,
-        activeSlideIndex:activeSlideIndex,
-        filePath:     undefined
-      };
-
-      stageLoadFile(stageFile);
-
-    } catch (err: any) {
+    if (isPreszip) {
+      setLoading({ filename: file.name, progress: 0 });
+      presentation = await loadFromArchive(file, (pct) => {
+        setLoading({ filename: file.name, progress: pct });
+      });
       setLoading(null);
-      setError(err?.message ?? 'Failed to load file.');
-      console.error('[StageDisplay] Load error:', err);
+
+      if (!isValidPresentation(presentation)) {
+        setError('Invalid .preszip — missing required presentation data.');
+        return;
+      }
+    } else {
+      const json = await readFileAsJson(file);
+      if (!json) { setError('Could not read file.'); return; }
+      if (!isValidPresentation(json)) {
+        setError('Invalid file. Must be a valid .petra or .json file.');
+        return;
+      }
+      presentation = json;
     }
-  }, [stageLoadFile]);
+
+    if (isReload && activeFile) {
+      // ✅ stageUpdateFile — replaces presentation, keeps id/name/filePath/slideIndex
+      stageUpdateFile({
+        ...activeFile,
+        presentation,
+      });
+      console.log('[StageDisplay] ✅ Reloaded via picker:', activeFile.name);
+    } else {
+      const stageFile: StageFile = {
+        id:               uuid(),
+        name:             file.name.replace(/\.[^/.]+$/, ''),
+        presentation,
+        activeSlideIndex: 0,
+        filePath:         undefined,
+      };
+      stageLoadFile(stageFile);
+    }
+
+  } catch (err: any) {
+    setLoading(null);
+    isReloadRef.current = false;
+    setError(err?.message ?? 'Failed to load file.');
+    console.error('[StageDisplay] Load error:', err);
+  }
+}, [activeFile, activeSlideIndex, stageLoadFile]);
 
   // ── Slide navigation ──────────────────────────────────────────────────────
   const handlePrevSlide = useCallback(() => {
@@ -435,6 +495,25 @@ const handleOpenInEditor = useCallback(async () => {
               title="Open current file in Editor window"
             >
               ✏️ Open in Editor
+            </button>
+          )}
+          {/* Reload File */}
+          {activeFile && (
+            <button
+              onClick={handleReloadFile}
+              disabled={!!loading}
+              style={{
+                ...styles.btn,
+                ...styles.btnGray,
+                opacity: loading ? 0.5 : 1,
+              }}
+              title={
+                activeFile.filePath
+                  ? `Reload "${activeFile.name}" from disk`
+                  : `Re-select "${activeFile.name}" to reload`
+              }
+            >
+              🔄 Reload
             </button>
           )}
           {/* Divider */}

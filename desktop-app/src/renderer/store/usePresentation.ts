@@ -68,6 +68,7 @@ interface PresentationState {
 
   openedFilePath:string | null;
   setOpenedFilePath: (path:string|null)=>void;
+  stageUpdateFile: (file:StageFile) => void;
 }
 
 const createDefaultSlide = (order: number): Slide => ({
@@ -643,6 +644,23 @@ addSlides: (newSlides: GeneratedSlide[], index?: number) => {
       };
     });
   },
+  stageUpdateFile: (file) => {
+  set((state) => {
+    const exists = state.stage.files.find(f => f.id === file.id);
+    if (!exists) return state;   // guard: file must already be loaded
+
+    return {
+      stage: {
+        ...state.stage,
+        files: state.stage.files.map(f =>
+          f.id === file.id
+            ? { ...f, presentation: file.presentation }  // ✅ swap presentation only
+            : f
+        ),
+      },
+    };
+  });
+},
 
   // ── remove a file from stage ─────────────────────────────
   stageRemoveFile: (fileId) => {
