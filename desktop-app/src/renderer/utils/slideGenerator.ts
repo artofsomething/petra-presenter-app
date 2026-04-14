@@ -3,18 +3,15 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ParsedSlide } from './slideParser';
 import type { SlideElement } from '../../server/types';
+import usePresentationStore from '../store/usePresentation';
 
-const SLIDE_WIDTH  = 1920;
-const SLIDE_HEIGHT = 1080;
-
-const MARGIN        = 40;   // outer margin
-const GAP           = 24;   // gap between elements
-const TITLE_HEIGHT  = 100;
-const TITLE_FONT    = 60;
-const CONTENT_FONT  = 36;
-
-// Lines visible per content block before overflow
-const LINE_HEIGHT_PX   = CONTENT_FONT * 1.5;   // ~54px per line
+// ── Layout constants (logical coords — independent of canvas preview scale) ───
+const MARGIN          = 40;    // outer margin on all sides
+const GAP             = 24;    // gap between stacked elements
+const TITLE_HEIGHT    = 100;   // fixed title element height
+const TITLE_FONT      = 60;
+const CONTENT_FONT    = 36;
+const LINE_HEIGHT_PX  = CONTENT_FONT * 1.5;   // ~54px per line
 const MIN_BLOCK_HEIGHT = 80;
 
 export interface GeneratedSlide {
@@ -27,97 +24,90 @@ export interface GeneratedSlide {
   notes:                string;
 }
 
+// ── Unique element ID ─────────────────────────────────────────────────────────
 function makeId(slideIndex: number, suffix: string): string {
   return `el_${Date.now()}_${slideIndex}_${suffix}`;
 }
 
-// ── Estimate element height from line count ───────────────────────────────────
-function estimateHeight(text: string, minHeight = MIN_BLOCK_HEIGHT): number {
+// ── Estimate block height from line count ─────────────────────────────────────
+function estimateHeight(text: string): number {
   const lineCount = text.split('\n').length;
-  const estimated = Math.ceil(lineCount * LINE_HEIGHT_PX) + GAP;
-  return Math.max(estimated, minHeight);
+  return Math.max(Math.ceil(lineCount * LINE_HEIGHT_PX) + GAP, MIN_BLOCK_HEIGHT);
 }
 
+// ── Main generator ────────────────────────────────────────────────────────────
 export function generateSlides(
   parsed:     ParsedSlide[],
   startOrder: number = 1,
 ): GeneratedSlide[] {
+
+  // ✅ Read canvas resolution from store at call time
+  const { canvasWidth, canvasHeight } = usePresentationStore.getState();
+
+  const SLIDE_WIDTH  = canvasWidth;
+  const SLIDE_HEIGHT = canvasHeight;
+
   return parsed.map((slide, i) => {
     const elements: SlideElement[] = [];
     let currentY = MARGIN;
 
-    // ── Title ─────────────────────────────────────────────────────────────────
+    // ── Title ───────────────────────────────────────────────────────────────
     if (slide.title) {
-      const titleEl: SlideElement = {
-        id:            makeId(i, 'title'),
-        type:          'text',
-        x:             MARGIN,
-        y:             currentY,
-        width:         SLIDE_WIDTH - MARGIN * 2,
-        height:        TITLE_HEIGHT,
-        rotation:      0,
-        opacity:       1,
-        text:          slide.title,
-        fontSize:      TITLE_FONT,
-        fontFamily:    'Arial',
-        fontColor:     '#ffffff',
-        fontWeight:    'bold',
-        fontStyle:     'normal',
-        textAlign:     'left',
-        verticalAlign: 'middle',
-        textPlacement: 'middleLeft',
-        strokeColor:   '#000000',
-        strokeWidth:   0,
-        shadowColor:   undefined,
-        shadowBlur:    0,
-        shadowOffsetX: 0,
-        shadowOffsetY: 0,
-        isLocked:      false,
-      };
-      elements.push(titleEl);
+      elements.push(
+        makeTitleElement(
+          makeId(i, 'title'),
+          slide.title,
+          MARGIN,
+          currentY,
+          SLIDE_WIDTH - MARGIN * 2,
+          TITLE_HEIGHT,
+        ),
+      );
       currentY += TITLE_HEIGHT + GAP;
     }
 
-    // ── Content blocks (dynamic height, stacked) ──────────────────────────────
-    const contentBlocks = slide.contents;
+    // ── Content blocks ───────────────────────────────────────────────────────
+    const blocks          = slide.contents;
     const remainingHeight = SLIDE_HEIGHT - currentY - MARGIN;
 
-    if (contentBlocks.length > 0) {
-      // ── Single block: fill remaining height ──────────────────────────────────
-      if (contentBlocks.length === 1) {
-        const contentEl = makeContentElement(
+    if (blocks.length === 0) {
+      // nothing to do
+    } else if (blocks.length === 1) {
+      // Single block — fill all remaining height
+      elements.push(
+        makeContentElement(
           makeId(i, 'content_0'),
-          contentBlocks[0],
+          blocks[0],
           currentY,
           remainingHeight,
+          SLIDE_WIDTH - MARGIN * 2,
+        ),
+      );
+    } else {
+      // Multiple blocks — divide space proportionally by line count
+      const estimates  = blocks.map(estimateHeight);
+      const totalEst   = estimates.reduce((a, b) => a + b, 0);
+      const totalGaps  = GAP * (blocks.length - 1);
+      const available  = remainingHeight - totalGaps;
+
+      blocks.forEach((text, ci) => {
+        const proportion = estimates[ci] / totalEst;
+        const blockH     = Math.max(
+          Math.floor(available * proportion),
+          MIN_BLOCK_HEIGHT,
         );
-        elements.push(contentEl);
 
-      } else {
-        // ── Multiple blocks: divide space by estimated proportions ────────────
-        const estimates  = contentBlocks.map(c => estimateHeight(c));
-        const totalEst   = estimates.reduce((a, b) => a + b, 0);
-        const totalGaps  = GAP * (contentBlocks.length - 1);
-        const available  = remainingHeight - totalGaps;
-
-        contentBlocks.forEach((text, ci) => {
-          // Proportional height based on line count estimate
-          const proportion = estimates[ci] / totalEst;
-          const blockH     = Math.max(
-            Math.floor(available * proportion),
-            MIN_BLOCK_HEIGHT,
-          );
-
-          const contentEl = makeContentElement(
+        elements.push(
+          makeContentElement(
             makeId(i, `content_${ci}`),
             text,
             currentY,
             blockH,
-          );
-          elements.push(contentEl);
-          currentY += blockH + GAP;
-        });
-      }
+            SLIDE_WIDTH - MARGIN * 2,
+          ),
+        );
+        currentY += blockH + GAP;
+      });
     }
 
     return {
@@ -132,19 +122,57 @@ export function generateSlides(
   });
 }
 
-// ── Build a single content SlideElement ──────────────────────────────────────
+// ── Title element factory ─────────────────────────────────────────────────────
+function makeTitleElement(
+  id:     string,
+  text:   string,
+  x:      number,
+  y:      number,
+  width:  number,
+  height: number,
+): SlideElement {
+  return {
+    id,
+    type:          'text',
+    x,
+    y,
+    width,
+    height,
+    rotation:      0,
+    opacity:       1,
+    text,
+    fontSize:      TITLE_FONT,
+    fontFamily:    'Arial',
+    fontColor:     '#ffffff',
+    fontWeight:    'bold',
+    fontStyle:     'normal',
+    textAlign:     'left',
+    verticalAlign: 'middle',
+    textPlacement: 'middleLeft',
+    strokeColor:   '#000000',
+    strokeWidth:   0,
+    shadowColor:   undefined,
+    shadowBlur:    0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    isLocked:      false,
+  };
+}
+
+// ── Content element factory ───────────────────────────────────────────────────
 function makeContentElement(
-  id:      string,
-  text:    string,
-  y:       number,
-  height:  number,
+  id:     string,
+  text:   string,
+  y:      number,
+  height: number,
+  width:  number,
 ): SlideElement {
   return {
     id,
     type:          'text',
     x:             MARGIN,
     y,
-    width:         SLIDE_WIDTH - MARGIN * 2,
+    width,
     height,
     rotation:      0,
     opacity:       1,

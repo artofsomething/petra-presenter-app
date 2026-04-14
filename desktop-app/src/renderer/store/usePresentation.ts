@@ -69,6 +69,9 @@ interface PresentationState {
   openedFilePath:string | null;
   setOpenedFilePath: (path:string|null)=>void;
   stageUpdateFile: (file:StageFile) => void;
+  canvasWidth:number;
+  canvasHeight:number;
+  setCanvasResolution: (width:number, height:number)=>void;
 }
 
 const createDefaultSlide = (order: number): Slide => ({
@@ -89,6 +92,8 @@ const usePresentationStore = create<PresentationState>((set, get) => ({
   selectedElementId: null,
   isPresenting: false,
   isBlackScreen: false,
+  canvasWidth:1920,
+  canvasHeight:1080,
 
   openedFilePath:null,
   setOpenedFilePath: (path) => set({ openedFilePath: path }),
@@ -107,6 +112,8 @@ const usePresentationStore = create<PresentationState>((set, get) => ({
     };
     set({ presentation, currentSlideIndex: 0 ,openedFilePath:null});
   },
+
+  setCanvasResolution:(width,height)=>set({canvasWidth:width,canvasHeight:height}),
 
 updateSlideBackground: (updates: {
   backgroundColor?:    string;

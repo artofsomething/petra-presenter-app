@@ -2,6 +2,7 @@
 // REPLACE ENTIRE FILE
 
 import React, { useEffect, useState, useCallback } from 'react';
+import usePresentationStore from '../../store/usePresentation';
 
 interface DisplayInfo {
   id:          number;
@@ -44,6 +45,8 @@ const DisplaySettings: React.FC = () => {
   const [isCustom, setIsCustom]   = useState(false);
   const [saved, setSaved]         = useState(false);
   const [saving, setSaving]       = useState(false);
+
+  const setCanvasResolutaion = usePresentationStore(s=>s.setCanvasResolution);
 
   // ── Load on open ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -99,6 +102,8 @@ const DisplaySettings: React.FC = () => {
 
     await api.setSelectedDisplays(settings.selectedDisplayIds);
     await api.setPresentationResolution(finalW, finalH);
+
+    setCanvasResolutaion(finalW,finalH);
 
     setSaving(false);
     setSaved(true);

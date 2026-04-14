@@ -1,6 +1,7 @@
 // src/renderer/App.tsx
 import { lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
+import { useLoadDisplaySettings } from './hooks/useLoadDisplaySettings';
 
 const Editor            = lazy(() => import('./pages/EditorPage'));
 const Presentation      = lazy(() => import('./pages/PresentationPage'));
@@ -20,7 +21,9 @@ function LoadingScreen() {
   );
 }
 
+
 export default function App() {
+  useLoadDisplaySettings();
   return (
     <HashRouter>
       <Suspense fallback={<LoadingScreen />}>
