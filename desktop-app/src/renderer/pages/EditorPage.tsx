@@ -1,4 +1,4 @@
-// src/renderer/pages/EditorPage.tsx
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SlideCanvas from '../components/Editor/SlideCanvas';
 import ElementToolbar from '../components/Editor/ElementToolbar';
@@ -21,6 +21,8 @@ import BackButton from '../components/Shared/BackButton';
 import SlideGeneratorModal from '../components/Editor/SlideGeneratorModal';
 import type { GeneratedSlide } from '../utils/slideGenerator';
 import AppCapturePicker from '../components/Advanced/AppCapturePicker';
+import FloatingElementActions from '../components/Editor/FloatingElementActions';
+import ElementContextMenu from '../components/Editor/FloatingElementActions';
 
 // ── Zoom constants ────────────────────────────────────────────────────────────
 const ZOOM_MIN     = 25;
@@ -462,6 +464,7 @@ const EditorPage: React.FC = () => {
     selectedElementId, copyElement, toggleLockElement,
     addSlide, addElement, setOpenedFilePath, openedFilePath,canvasWidth,canvasHeight
   } = usePresentationStore();
+  
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [showConnection,         setShowConnection]        = useState(false);
@@ -480,6 +483,8 @@ const EditorPage: React.FC = () => {
   const [assetTarget,            setAssetTarget]           = useState<'image' | 'video' | 'bgImage' | 'bgVideo'>('image');
   const [showGenerator,          setShowGenerator]         = useState(false);
   const [showCapturePicker,      setShowCapturePicker]     = useState(false);
+
+  
 
   const [zoom,          setZoom]          = useState<number>(ZOOM_DEFAULT);
   const [actualCanvasW, setActualCanvasW] = useState(0);
@@ -619,6 +624,17 @@ const EditorPage: React.FC = () => {
 
   const currentSlide    = presentation?.slides[currentSlideIndex];
   const selectedElement = currentSlide?.elements.find(el => el.id === selectedElementId);
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!selectedElement) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, [selectedElement]);
 
   // ── Keep connectedRef in sync ─────────────────────────────────────────────
   useEffect(() => { connectedRef.current = isConnected; }, [isConnected]);
@@ -1188,60 +1204,7 @@ const EditorPage: React.FC = () => {
         <ElementToolbar />
       </div>
 
-      {/* ── Element Action Bar ──────────────────────────────────────────────── */}
-      {selectedElement && (
-        <div className="px-4 py-1.5 border-b border-gray-800 bg-blue-950/30
-                        flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <span>Selected:</span>
-            <span className="text-white font-medium">
-              {selectedElement.type === 'text'
-                ? `📝 "${(selectedElement.text || 'Text').substring(0, 25)}${
-                    (selectedElement.text || '').length > 25 ? '...' : ''}"`
-                : selectedElement.type === 'shape'
-                ? `🔷 Shape (${selectedElement.shapeType || 'rect'})`
-                : selectedElement.type === 'image' ? '🖼️ Image'
-                : selectedElement.type === 'video' ? '🎬 Video'
-                : selectedElement.type}
-            </span>
-            {selectedElement.isLocked && (
-              <span className="bg-yellow-900/50 text-yellow-400 border border-yellow-700/50
-                               px-1.5 py-0.5 rounded text-[10px] font-medium">
-                🔒 Locked
-              </span>
-            )}
-          </div>
-          <div className="flex-1" />
-          <button
-            onClick={() => copyElement(selectedElementId!)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs
-                       bg-blue-700/50 hover:bg-blue-600/80
-                       border border-blue-600/50 rounded"
-            title="Duplicate (Ctrl+D)"
-          >
-            <span>⧉</span>
-            <span>Duplicate</span>
-            <kbd className="text-[9px] text-blue-300 bg-blue-900/50 px-1 rounded">
-              Ctrl+D
-            </kbd>
-          </button>
-          <button
-            onClick={() => toggleLockElement(selectedElementId!)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border ${
-              selectedElement.isLocked
-                ? 'bg-yellow-700/50 hover:bg-yellow-600/80 border-yellow-600/50 text-yellow-200'
-                : 'bg-gray-700/50 hover:bg-gray-600/80 border-gray-600/50 text-gray-200'
-            }`}
-            title={selectedElement.isLocked ? 'Unlock (Ctrl+L)' : 'Lock (Ctrl+L)'}
-          >
-            <span>{selectedElement.isLocked ? '🔒' : '🔓'}</span>
-            <span>{selectedElement.isLocked ? 'Unlock' : 'Lock'}</span>
-            <kbd className="text-[9px] text-gray-400 bg-gray-900/50 px-1 rounded">
-              Ctrl+L
-            </kbd>
-          </button>
-        </div>
-      )}
+      
 
       {/* ── Main Content ────────────────────────────────────────────────────── */}
             {/* ── Main Content ────────────────────────────────────────────────────── */}
@@ -1342,6 +1305,7 @@ const EditorPage: React.FC = () => {
           <div
             ref={canvasAreaRef}
             className="flex-1 overflow-auto bg-gray-950"
+            onContextMenu={handleContextMenu}
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
           >
             {/*
@@ -1350,6 +1314,8 @@ const EditorPage: React.FC = () => {
               min-width/height ensure the canvas is always centred when
               smaller than the viewport, but scrollable when larger.
             */}
+
+            
             <div
               className="flex items-start justify-center"
               style={{
@@ -1379,6 +1345,22 @@ const EditorPage: React.FC = () => {
                 <SlideCanvas editable={true} />
               </div>
             </div>
+            {/* ✅ Context menu — only when element selected + right-clicked */}
+            {contextMenu && selectedElement && (
+              <ElementContextMenu
+                element={selectedElement}
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onDuplicate={() => copyElement(selectedElementId!)}
+                onToggleLock={() => toggleLockElement(selectedElementId!)}
+                onDelete={() => {
+                  usePresentationStore.getState()
+                    .deleteElement(currentSlideIndex, selectedElementId!);
+                }}
+                onClose={() => setContextMenu(null)}
+              />
+            )}
+            
           </div>
         </div>
 

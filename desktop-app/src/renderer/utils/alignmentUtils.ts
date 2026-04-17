@@ -42,3 +42,18 @@ export function resolveAlignment(
     vertical:   verticalAlign ?? 'top',
   };
 }
+
+  // ── Normalize to Konva-safe values (same as EditableText) ─────────────────
+  // ── Konva alignment normalizers ───────────────────────────────────────────────
+  // Accepts any string so TypeScript doesn't narrow the union before comparison
+  export function toKonvaHAlign(v: string | undefined): 'left' | 'center' | 'right' {
+    if (v === 'center' || v === 'middle')                       return 'center';
+    if (v === 'right'  || v === 'end'   || v === 'flex-end')    return 'right';
+    return 'left';
+  }
+
+  export function toKonvaVAlign(v: string | undefined): 'top' | 'middle' | 'bottom' {
+    if (v === 'middle' || v === 'center')                       return 'middle';
+    if (v === 'bottom' || v === 'end'   || v === 'flex-end')    return 'bottom';
+    return 'top';
+  }

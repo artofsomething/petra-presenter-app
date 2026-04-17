@@ -28,6 +28,7 @@ interface SlideCanvasProps {
   editable?: boolean;
 }
 
+// 1. Update TextEditState — remove _nodeWasVisible
 interface TextEditState {
   elementId:  string;
   x:          number;
@@ -264,16 +265,15 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
     },
     [editable, currentSlideIndex, updateElement, SCALE],
   );
-
-  // ── Text editing ──────────────────────────────────────────────────────────
+// ── Text editing ──────────────────────────────────────────────────────────
+  // 2. Replace all three handlers — no more hide/show
   const handleTextDoubleClick = useCallback(
     (element: SlideElement, textNode: Konva.Text) => {
       if (!editable || !stageRef.current) return;
 
-      textNode.hide();
+      // ✅ Do NOT call textNode.hide() — let CSS opacity handle it
       transformerRef.current?.nodes([]);
       transformerRef.current?.getLayer()?.batchDraw();
-      textNode.getLayer()?.batchDraw();
 
       const textRect = textNode.getClientRect();
 
@@ -299,12 +299,8 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
   const handleTextSave = useCallback(
     (newText: string) => {
       if (!editingText) return;
+      // ✅ Just update the text — React re-renders everything correctly
       updateElement(currentSlideIndex, editingText.elementId, { text: newText });
-      const textNode = stageRef.current?.findOne(`#${editingText.elementId}`);
-      if (textNode) {
-        textNode.show();
-        textNode.getLayer()?.batchDraw();
-      }
       setEditingText(null);
       setSelectedElementId(editingText.elementId);
     },
@@ -313,11 +309,7 @@ const SlideCanvas: React.FC<SlideCanvasProps> = ({ editable = true }) => {
 
   const handleTextCancel = useCallback(() => {
     if (!editingText) return;
-    const textNode = stageRef.current?.findOne(`#${editingText.elementId}`);
-    if (textNode) {
-      textNode.show();
-      textNode.getLayer()?.batchDraw();
-    }
+    // ✅ Just clear editing state — nothing to restore
     setEditingText(null);
   }, [editingText]);
 
