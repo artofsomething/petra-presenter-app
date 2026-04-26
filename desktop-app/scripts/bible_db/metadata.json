@@ -1,0 +1,473 @@
+{
+  "translation": "TB (Terjemahan Baru)",
+  "language": "Indonesian",
+  "source": "https://alkitab.mobi",
+  "totalBooks": 66,
+  "totalChapters": 1189,
+  "totalVerses": 29177,
+  "scrapedAt": "2026-04-26T09:08:30.401Z",
+  "books": [
+    {
+      "number": 1,
+      "name": "Kejadian",
+      "abbr": "Kej",
+      "chapters": 50,
+      "verses": 1434
+    },
+    {
+      "number": 2,
+      "name": "Keluaran",
+      "abbr": "Kel",
+      "chapters": 40,
+      "verses": 1148
+    },
+    {
+      "number": 3,
+      "name": "Imamat",
+      "abbr": "Im",
+      "chapters": 27,
+      "verses": 778
+    },
+    {
+      "number": 4,
+      "name": "Bilangan",
+      "abbr": "Bil",
+      "chapters": 36,
+      "verses": 1230
+    },
+    {
+      "number": 5,
+      "name": "Ulangan",
+      "abbr": "Ul",
+      "chapters": 34,
+      "verses": 912
+    },
+    {
+      "number": 6,
+      "name": "Yosua",
+      "abbr": "Yos",
+      "chapters": 24,
+      "verses": 634
+    },
+    {
+      "number": 7,
+      "name": "Hakim-hakim",
+      "abbr": "Hak",
+      "chapters": 21,
+      "verses": 587
+    },
+    {
+      "number": 8,
+      "name": "Rut",
+      "abbr": "Rut",
+      "chapters": 4,
+      "verses": 85
+    },
+    {
+      "number": 9,
+      "name": "1 Samuel",
+      "abbr": "1Sam",
+      "chapters": 31,
+      "verses": 696
+    },
+    {
+      "number": 10,
+      "name": "2 Samuel",
+      "abbr": "2Sam",
+      "chapters": 24,
+      "verses": 682
+    },
+    {
+      "number": 11,
+      "name": "1 Raja-raja",
+      "abbr": "1Raj",
+      "chapters": 22,
+      "verses": 792
+    },
+    {
+      "number": 12,
+      "name": "2 Raja-raja",
+      "abbr": "2Raj",
+      "chapters": 25,
+      "verses": 608
+    },
+    {
+      "number": 13,
+      "name": "1 Tawarikh",
+      "abbr": "1Taw",
+      "chapters": 29,
+      "verses": 912
+    },
+    {
+      "number": 14,
+      "name": "2 Tawarikh",
+      "abbr": "2Taw",
+      "chapters": 36,
+      "verses": 799
+    },
+    {
+      "number": 15,
+      "name": "Ezra",
+      "abbr": "Ezr",
+      "chapters": 10,
+      "verses": 267
+    },
+    {
+      "number": 16,
+      "name": "Nehemia",
+      "abbr": "Neh",
+      "chapters": 13,
+      "verses": 406
+    },
+    {
+      "number": 17,
+      "name": "Ester",
+      "abbr": "Est",
+      "chapters": 10,
+      "verses": 135
+    },
+    {
+      "number": 18,
+      "name": "Ayub",
+      "abbr": "Ayb",
+      "chapters": 42,
+      "verses": 1049
+    },
+    {
+      "number": 19,
+      "name": "Mazmur",
+      "abbr": "Mzm",
+      "chapters": 150,
+      "verses": 2285
+    },
+    {
+      "number": 20,
+      "name": "Amsal",
+      "abbr": "Ams",
+      "chapters": 31,
+      "verses": 887
+    },
+    {
+      "number": 21,
+      "name": "Pengkhotbah",
+      "abbr": "Pkh",
+      "chapters": 12,
+      "verses": 202
+    },
+    {
+      "number": 22,
+      "name": "Kidung Agung",
+      "abbr": "Kid",
+      "chapters": 8,
+      "verses": 104
+    },
+    {
+      "number": 23,
+      "name": "Yesaya",
+      "abbr": "Yes",
+      "chapters": 66,
+      "verses": 1226
+    },
+    {
+      "number": 24,
+      "name": "Yeremia",
+      "abbr": "Yer",
+      "chapters": 52,
+      "verses": 1245
+    },
+    {
+      "number": 25,
+      "name": "Ratapan",
+      "abbr": "Rat",
+      "chapters": 5,
+      "verses": 154
+    },
+    {
+      "number": 26,
+      "name": "Yehezkiel",
+      "abbr": "Yeh",
+      "chapters": 48,
+      "verses": 1192
+    },
+    {
+      "number": 27,
+      "name": "Daniel",
+      "abbr": "Dan",
+      "chapters": 12,
+      "verses": 330
+    },
+    {
+      "number": 28,
+      "name": "Hosea",
+      "abbr": "Hos",
+      "chapters": 14,
+      "verses": 183
+    },
+    {
+      "number": 29,
+      "name": "Yoel",
+      "abbr": "Yl",
+      "chapters": 3,
+      "verses": 73
+    },
+    {
+      "number": 30,
+      "name": "Amos",
+      "abbr": "Am",
+      "chapters": 9,
+      "verses": 132
+    },
+    {
+      "number": 31,
+      "name": "Obaja",
+      "abbr": "Ob",
+      "chapters": 1,
+      "verses": 21
+    },
+    {
+      "number": 32,
+      "name": "Yunus",
+      "abbr": "Yun",
+      "chapters": 4,
+      "verses": 31
+    },
+    {
+      "number": 33,
+      "name": "Mikha",
+      "abbr": "Mi",
+      "chapters": 7,
+      "verses": 105
+    },
+    {
+      "number": 34,
+      "name": "Nahum",
+      "abbr": "Nah",
+      "chapters": 3,
+      "verses": 28
+    },
+    {
+      "number": 35,
+      "name": "Habakuk",
+      "abbr": "Hab",
+      "chapters": 3,
+      "verses": 56
+    },
+    {
+      "number": 36,
+      "name": "Zefanya",
+      "abbr": "Zef",
+      "chapters": 3,
+      "verses": 53
+    },
+    {
+      "number": 37,
+      "name": "Hagai",
+      "abbr": "Hag",
+      "chapters": 2,
+      "verses": 38
+    },
+    {
+      "number": 38,
+      "name": "Zakharia",
+      "abbr": "Za",
+      "chapters": 14,
+      "verses": 211
+    },
+    {
+      "number": 39,
+      "name": "Maleakhi",
+      "abbr": "Mal",
+      "chapters": 4,
+      "verses": 55
+    },
+    {
+      "number": 40,
+      "name": "Matius",
+      "abbr": "Mat",
+      "chapters": 28,
+      "verses": 1002
+    },
+    {
+      "number": 41,
+      "name": "Markus",
+      "abbr": "Mrk",
+      "chapters": 16,
+      "verses": 589
+    },
+    {
+      "number": 42,
+      "name": "Lukas",
+      "abbr": "Luk",
+      "chapters": 24,
+      "verses": 1060
+    },
+    {
+      "number": 43,
+      "name": "Yohanes",
+      "abbr": "Yoh",
+      "chapters": 21,
+      "verses": 837
+    },
+    {
+      "number": 44,
+      "name": "Kisah Para Rasul",
+      "abbr": "Kis",
+      "chapters": 28,
+      "verses": 966
+    },
+    {
+      "number": 45,
+      "name": "Roma",
+      "abbr": "Rom",
+      "chapters": 16,
+      "verses": 433
+    },
+    {
+      "number": 46,
+      "name": "1 Korintus",
+      "abbr": "1Kor",
+      "chapters": 16,
+      "verses": 437
+    },
+    {
+      "number": 47,
+      "name": "2 Korintus",
+      "abbr": "2Kor",
+      "chapters": 13,
+      "verses": 239
+    },
+    {
+      "number": 48,
+      "name": "Galatia",
+      "abbr": "Gal",
+      "chapters": 6,
+      "verses": 149
+    },
+    {
+      "number": 49,
+      "name": "Efesus",
+      "abbr": "Ef",
+      "chapters": 6,
+      "verses": 131
+    },
+    {
+      "number": 50,
+      "name": "Filipi",
+      "abbr": "Flp",
+      "chapters": 4,
+      "verses": 104
+    },
+    {
+      "number": 51,
+      "name": "Kolose",
+      "abbr": "Kol",
+      "chapters": 4,
+      "verses": 77
+    },
+    {
+      "number": 52,
+      "name": "1 Tesalonika",
+      "abbr": "1Tes",
+      "chapters": 5,
+      "verses": 61
+    },
+    {
+      "number": 53,
+      "name": "2 Tesalonika",
+      "abbr": "2Tes",
+      "chapters": 3,
+      "verses": 29
+    },
+    {
+      "number": 54,
+      "name": "1 Timotius",
+      "abbr": "1Tim",
+      "chapters": 6,
+      "verses": 113
+    },
+    {
+      "number": 55,
+      "name": "2 Timotius",
+      "abbr": "2Tim",
+      "chapters": 4,
+      "verses": 83
+    },
+    {
+      "number": 56,
+      "name": "Titus",
+      "abbr": "Tit",
+      "chapters": 3,
+      "verses": 46
+    },
+    {
+      "number": 57,
+      "name": "Filemon",
+      "abbr": "Flm",
+      "chapters": 1,
+      "verses": 25
+    },
+    {
+      "number": 58,
+      "name": "Ibrani",
+      "abbr": "Ibr",
+      "chapters": 13,
+      "verses": 287
+    },
+    {
+      "number": 59,
+      "name": "Yakobus",
+      "abbr": "Yak",
+      "chapters": 5,
+      "verses": 82
+    },
+    {
+      "number": 60,
+      "name": "1 Petrus",
+      "abbr": "1Ptr",
+      "chapters": 5,
+      "verses": 86
+    },
+    {
+      "number": 61,
+      "name": "2 Petrus",
+      "abbr": "2Ptr",
+      "chapters": 3,
+      "verses": 61
+    },
+    {
+      "number": 62,
+      "name": "1 Yohanes",
+      "abbr": "1Yoh",
+      "chapters": 5,
+      "verses": 105
+    },
+    {
+      "number": 63,
+      "name": "2 Yohanes",
+      "abbr": "2Yoh",
+      "chapters": 1,
+      "verses": 13
+    },
+    {
+      "number": 64,
+      "name": "3 Yohanes",
+      "abbr": "3Yoh",
+      "chapters": 1,
+      "verses": 14
+    },
+    {
+      "number": 65,
+      "name": "Yudas",
+      "abbr": "Yud",
+      "chapters": 1,
+      "verses": 0
+    },
+    {
+      "number": 66,
+      "name": "Wahyu",
+      "abbr": "Why",
+      "chapters": 22,
+      "verses": 383
+    }
+  ]
+}

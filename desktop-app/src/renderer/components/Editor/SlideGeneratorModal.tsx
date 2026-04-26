@@ -1,14 +1,17 @@
 // src/renderer/components/Editor/SlideGeneratorModal.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { parseSlideMarkup, migrateLegacyMarkup } from '../../utils/slideParser';
 import { generateSlides }    from '../../utils/slideGenerator';
 import type { GeneratedSlide } from '../../utils/slideGenerator';
+import { importPresentationFile } from '../../utils/fileImporter';
+import BibleLookupPanel from './BibleLookupPanel';
 
 interface SlideGeneratorModalProps {
   onClose:           () => void;
   onGenerate:        (slides: GeneratedSlide[]) => void;
   currentSlideCount: number;
+  initialMarkup?:    string;   // ✅ NEW — pre-fill from import
 }
 
 const EXAMPLE = `# Sermon Title
@@ -43,12 +46,36 @@ const SlideGeneratorModal: React.FC<SlideGeneratorModalProps> = ({
   onClose,
   onGenerate,
   currentSlideCount,
+  initialMarkup,
 }) => {
-  const [input,          setInput]          = useState('');
+  const [input,          setInput]          = useState(initialMarkup ?? '');
   const [preview,        setPreview]        = useState<ReturnType<typeof parseSlideMarkup>>([]);
   const [error,          setError]          = useState('');
   const [tab,            setTab]            = useState<'input' | 'preview'>('input');
   const [showCheatSheet, setShowCheatSheet] = useState(false);
+  const [isImporting,    setIsImporting]    = useState(false);
+  const [importError,    setImportError]    = useState<string | null>(null);
+  
+
+  const [showBible, setShowBible] = useState(false);
+
+  // ✅ If initialMarkup is provided later (e.g., from import), update input
+  useEffect(() => {
+    if (initialMarkup) {
+      setInput(initialMarkup);
+      setError('');
+    }
+  }, [initialMarkup]);
+
+  const handleBibleInsert = useCallback((slideMarkup: string) => {
+  setInput(prev => {
+    if (!prev.trim()) return slideMarkup;
+    // Append with slide separator
+    return prev.trimEnd() + '\n\n---\n\n' + slideMarkup;
+  });
+  setError('');
+  setShowBible(false);
+}, []);
 
   function sanitizeInput(raw: string): string {
     return raw
@@ -72,7 +99,6 @@ const SlideGeneratorModal: React.FC<SlideGeneratorModalProps> = ({
   const parsedSlides = parseSlideMarkup(input);
   const parsedCount  = parsedSlides.length;
 
-  // Derived stats for feedback bar
   const totalBlocks   = parsedSlides.reduce((s, sl) => s + sl.blocks.length, 0);
   const centredSlides = parsedSlides.filter(sl => sl.blocks.every(b => !b.text));
   const subtitleCount = parsedSlides.reduce(
@@ -107,6 +133,36 @@ const SlideGeneratorModal: React.FC<SlideGeneratorModalProps> = ({
     setError('');
   }, []);
 
+  // ✅ NEW — Import PDF/DOCX and populate textarea
+  const handleImportFile = useCallback(async () => {
+    setIsImporting(true);
+    setImportError(null);
+
+    try {
+      const result = await importPresentationFile();
+
+      if (!result) {
+        // User cancelled
+        setIsImporting(false);
+        return;
+      }
+
+      // Populate the textarea with the generated markup
+      setInput(result.markup);
+      setError('');
+      setTab('input');
+
+      console.log(
+        `[SlideGenerator] Imported ${result.fileName}: ${result.slideCount} slides detected`
+      );
+    } catch (err: any) {
+      console.error('[SlideGenerator] Import error:', err);
+      setImportError(err.message || 'Failed to import file');
+    } finally {
+      setIsImporting(false);
+    }
+  }, []);
+
   return (
     <div style={styles.backdrop}>
       <div style={styles.modal}>
@@ -115,7 +171,7 @@ const SlideGeneratorModal: React.FC<SlideGeneratorModalProps> = ({
         <div style={styles.header}>
           <div style={styles.headerLeft}>
             <span style={styles.headerTitle}>⚡ Generate Slides</span>
-            <span style={styles.headerSub}>Each block can have its own subtitle</span>
+            <span style={styles.headerSub}>Type, paste, or import from PDF / DOCX</span>
           </div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -136,10 +192,50 @@ const SlideGeneratorModal: React.FC<SlideGeneratorModalProps> = ({
             )}
           </button>
           <div style={{ flex: 1 }} />
+
+          <button
+            style={styles.bibleBtn}
+            onClick={() => setShowBible(true)}
+            title="Cari ayat Alkitab"
+          >
+            📖 Alkitab
+          </button>
+
+          {/* ✅ NEW — Import button in tabs bar */}
+          <button
+            style={{
+              ...styles.importBtn,
+              ...(isImporting ? styles.importBtnLoading : {}),
+            }}
+            onClick={handleImportFile}
+            disabled={isImporting}
+            title="Import a PDF or Word document"
+          >
+            {isImporting ? (
+              <>
+                <span style={styles.spinner}>⏳</span>
+                Importing...
+              </>
+            ) : (
+              <>📄 Import File</>
+            )}
+          </button>
+
           <button style={styles.exampleBtn} onClick={handleExample}>
             📋 Load Example
           </button>
         </div>
+
+        {/* ✅ Import error banner */}
+        {importError && (
+          <div style={styles.importErrorBanner}>
+            <span>⚠️ Import failed: {importError}</span>
+            <button
+              style={styles.importErrorDismiss}
+              onClick={() => setImportError(null)}
+            >✕</button>
+          </div>
+        )}
 
         {/* ════════ INPUT TAB ════════ */}
         {tab === 'input' && (
@@ -326,8 +422,6 @@ Content for block 2
 
                     return (
                       <div key={i} style={styles.previewCard}>
-
-                        {/* ── Thumbnail ── */}
                         <div
                           style={{
                             ...styles.thumbnail,
@@ -335,49 +429,32 @@ Content for block 2
                             justifyContent: isCentred ? 'center' : 'flex-start',
                           }}
                         >
-                          {/* Slide number */}
                           <span style={styles.thumbIndex}>{i + 1}</span>
-
-                          {/* Centred badge */}
                           {isCentred && (
                             <span style={styles.centredBadge}>⊹ Centred</span>
                           )}
-
                           <div style={{
-                            display:       'flex',
-                            flexDirection: 'column',
-                            gap:           6,
-                            width:         '100%',
-                            alignItems:    isCentred ? 'center' : 'flex-start',
-                            textAlign:     isCentred ? 'center' : 'left',
+                            display: 'flex', flexDirection: 'column', gap: 6,
+                            width: '100%',
+                            alignItems: isCentred ? 'center' : 'flex-start',
+                            textAlign:  isCentred ? 'center' : 'left',
                           }}>
-                            {/* Title */}
                             {slide.title && (
                               <div style={styles.thumbTitle}>{slide.title}</div>
                             )}
-
-                            {/* Blocks */}
                             {slide.blocks.map((block, bi) => (
                               <div
                                 key={bi}
                                 style={{
                                   ...styles.thumbBlock,
-                                  // Visually separate blocks after the first
-                                  borderLeft: bi > 0 && !isCentred
-                                    ? '2px solid #1e3a5f'
-                                    : 'none',
+                                  borderLeft: bi > 0 && !isCentred ? '2px solid #1e3a5f' : 'none',
                                   paddingLeft: bi > 0 && !isCentred ? 8 : 0,
-                                  marginTop:   bi > 0 ? 4 : 0,
+                                  marginTop: bi > 0 ? 4 : 0,
                                 }}
                               >
-                                {/* Per-block subtitle */}
                                 {block.subtitle && (
-                                  <div style={styles.thumbSubtitle}>
-                                    {block.subtitle}
-                                  </div>
+                                  <div style={styles.thumbSubtitle}>{block.subtitle}</div>
                                 )}
-
-                                {/* Body text */}
                                 {block.text && (
                                   <div style={styles.thumbContent}>
                                     {block.text.split('\n').slice(0, 3).map((line, li) =>
@@ -401,27 +478,18 @@ Content for block 2
                             ))}
                           </div>
                         </div>
-
-                        {/* ── Meta row ── */}
                         <div style={styles.previewMeta}>
                           <span style={styles.slideNum}>Slide {i + 1}</span>
-
                           {slide.title && (
-                            <span style={{ ...styles.tag, ...styles.tagTitle }}>
-                              📌 Title
-                            </span>
+                            <span style={{ ...styles.tag, ...styles.tagTitle }}>📌 Title</span>
                           )}
-
                           {totalBlockSubtitles > 0 && (
                             <span style={{ ...styles.tag, ...styles.tagSubtitle }}>
                               💬 {totalBlockSubtitles} subtitle{totalBlockSubtitles !== 1 ? 's' : ''}
                             </span>
                           )}
-
                           {isCentred ? (
-                            <span style={{ ...styles.tag, ...styles.tagCentred }}>
-                              ⊹ Centred
-                            </span>
+                            <span style={{ ...styles.tag, ...styles.tagCentred }}>⊹ Centred</span>
                           ) : slide.blocks.filter(b => b.text).length > 0 && (
                             <span style={{ ...styles.tag, ...styles.tagContent }}>
                               📝 {slide.blocks.filter(b => b.text).length} block
@@ -457,6 +525,11 @@ Content for block 2
           </button>
         </div>
       </div>
+      <BibleLookupPanel
+          isOpen={showBible}
+          onClose={() => setShowBible(false)}
+          onInsert={handleBibleInsert}
+        />
     </div>
   );
 };
@@ -500,6 +573,33 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#3d5afe', color: '#fff', fontSize: 10,
     fontWeight: 700, padding: '1px 6px', borderRadius: 10,
   },
+
+  // ✅ NEW — Import button styles
+  importBtn: {
+    display: 'flex', alignItems: 'center', gap: 5,
+    background: '#1e3a5f', border: '1px solid #2563eb',
+    color: '#7dd3fc', fontSize: 11, fontWeight: 600,
+    padding: '5px 12px', borderRadius: 6, cursor: 'pointer',
+    marginBottom: 4, transition: 'all 0.15s',
+  },
+  importBtnLoading: {
+    background: '#1e293b', borderColor: '#334155',
+    color: '#64748b', cursor: 'wait',
+  },
+  spinner: {
+    display: 'inline-block',
+    animation: 'spin 1s linear infinite',
+  },
+  importErrorBanner: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '8px 18px', background: '#450a0a', borderBottom: '1px solid #7f1d1d',
+    fontSize: 12, color: '#fca5a5', flexShrink: 0,
+  },
+  importErrorDismiss: {
+    background: 'transparent', border: 'none', color: '#fca5a5',
+    cursor: 'pointer', fontSize: 14, padding: '0 4px',
+  },
+
   exampleBtn: {
     background: 'transparent', border: '1px solid #2e3447', color: '#8b92a5',
     fontSize: 11, padding: '4px 10px', borderRadius: 5, cursor: 'pointer', marginBottom: 4,
@@ -638,6 +738,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13, fontWeight: 600, padding: '8px 20px', borderRadius: 6, cursor: 'pointer',
   },
   btnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
+  bibleBtn: {
+  display: 'flex', alignItems: 'center', gap: 5,
+  background: '#14532d', border: '1px solid #16a34a',
+  color: '#86efac', fontSize: 11, fontWeight: 600,
+  padding: '5px 12px', borderRadius: 6, cursor: 'pointer',
+  marginBottom: 4,
+},
 };
 
 export default SlideGeneratorModal;

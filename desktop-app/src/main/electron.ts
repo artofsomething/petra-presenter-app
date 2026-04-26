@@ -3,7 +3,9 @@ import { app, BrowserWindow, screen, ipcMain,desktopCapturer, dialog } from 'ele
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import * as fsp from 'fs/promises';
 import { startWebSocketServer, getIO } from '../server/websocket-server';
+import { registerBibleIpc } from './bibleHandlers';
 
 let mainWindow: BrowserWindow | null = null;
 const presentationWindows = new Map<number, BrowserWindow>();
@@ -345,6 +347,15 @@ ipcMain.handle('dialog:saveFile', async (_e, {
   }
 });
 
+ipcMain.handle('read-file-as-base64', async (_event, filePath: string) => {
+  try {
+    const buffer = await fsp.readFile(filePath);
+    return { content: buffer.toString('base64') };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
 // ── File: Read content ────────────────────────────────────────────────────
 ipcMain.handle('file:read', (_e, filePath: string) => {
   try {
@@ -407,7 +418,140 @@ ipcMain.handle('file:unwatch', (_e, filePath: string) => {
   return true;
 });
 
-// src/main/index.ts
+// In your main process handlers file
+
+ipcMain.handle('import-presentation-file', async (_event, filePath: string) => {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const buffer = await fsp.readFile(filePath);
+
+    if (ext === '.pdf') {
+      // ── PDF ─────────────────────────────────────────────────────────────
+      const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+
+      const uint8 = new Uint8Array(buffer);
+      const loadingTask = pdfjsLib.getDocument({
+        data: uint8,
+        useSystemFonts: true,
+      });
+      const pdfDoc = await loadingTask.promise;
+      const pages: string[] = [];
+
+      console.log(`[import] PDF loaded: ${pdfDoc.numPages} pages`);
+
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const textContent = await page.getTextContent();
+        const strings: string[] = [];
+        let lastY: number | null = null;
+
+        for (const item of textContent.items) {
+          const textItem = item as any;
+          if (!textItem.str && !textItem.str?.trim()) continue;
+
+          if (lastY !== null && Math.abs(textItem.transform[5] - lastY) > 2) {
+            strings.push('\n');
+          }
+          strings.push(textItem.str);
+          lastY = textItem.transform[5];
+        }
+
+        const pageText = strings.join('').trim();
+        if (pageText) pages.push(pageText);
+        console.log(`[import] Page ${i}: ${pageText.length} chars`);
+      }
+
+      return { success: true, fileType: 'pdf', pages };
+
+    } else if (ext === '.docx') {
+      // ── DOCX ────────────────────────────────────────────────────────────
+      let mammoth: any;
+      try {
+        const mod = require('mammoth');
+        mammoth = mod.default || mod;
+      } catch (e) {
+        console.error('[import] Failed to load mammoth:', e);
+        return { success: false, error: 'mammoth module not found' };
+      }
+
+      const result = await mammoth.convertToHtml(
+        { buffer },
+        {
+          styleMap: [
+            "p[style-name='Title'] => h1:fresh",
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Subtitle'] => h2:fresh",
+          ],
+        },
+      );
+
+      console.log(`[import] DOCX converted: ${result.value.length} chars of HTML`);
+      return { success: true, fileType: 'docx', html: result.value };
+
+    } else if (ext === '.doc') {
+      // ── DOC (legacy binary format) ──────────────────────────────────────
+      const WordExtractor = require('word-extractor');
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(buffer);
+
+      // Get the main body text
+      const body = doc.getBody() || '';
+      // Get headers if available
+      const headers = doc.getHeaders({ includeFooters: false }) || '';
+
+      console.log(`[import] DOC extracted: ${body.length} chars`);
+
+      // Split into paragraphs and build simple HTML-like structure
+      // so we can reuse the same DOCX→markup pipeline
+      const paragraphs = body
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 0);
+
+      // Heuristic: try to detect headings
+      // Short lines that are ALL CAPS or end with no period → likely headings
+      const htmlParts: string[] = [];
+
+      for (const para of paragraphs) {
+        const isLikelyHeading =
+          (para.length < 80 && para === para.toUpperCase() && para.length > 3) ||
+          (para.length < 60 && !para.endsWith('.') && !para.endsWith(',') && !para.includes('. '));
+
+        if (isLikelyHeading && para.length < 40) {
+          htmlParts.push(`<h1>${escapeHtml(para)}</h1>`);
+        } else if (isLikelyHeading) {
+          htmlParts.push(`<h2>${escapeHtml(para)}</h2>`);
+        } else {
+          htmlParts.push(`<p>${escapeHtml(para)}</p>`);
+        }
+      }
+
+      const html = htmlParts.join('\n');
+      console.log(`[import] DOC → HTML: ${html.length} chars`);
+
+      // Return as 'docx' fileType so renderer uses the same HTML→markup pipeline
+      return { success: true, fileType: 'docx', html };
+
+    } else {
+      return { success: false, error: `Unsupported file type: ${ext}` };
+    }
+  } catch (err: any) {
+    console.error('[import-presentation-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Helper to escape HTML special characters
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 const editorWindows = new Map<string, BrowserWindow>();
 
@@ -510,6 +654,7 @@ ipcMain.handle('get-pending-editor-file', (event) => {
 
 app.whenReady().then(async () => {
   const wsPort = 8765;
+   registerBibleIpc();
 
   // ✅ Start WS server FIRST, wait for it to be ready
   startWebSocketServer(wsPort);

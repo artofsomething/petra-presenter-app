@@ -1,4 +1,26 @@
-// src/renderer/types/electron.d.ts
+
+interface BibleBook {
+  id: number; name: string; name_short: string; testament: string; chapters: number;
+}
+interface BibleVerse {
+  book_id: number; book_name: string; book_short: string;
+  chapter: number; verse: number; text: string;
+}
+interface BibleSearchResult {
+  book_id: number; book_name: string; chapter: number;
+  verse: number; text: string; reference: string;
+}
+interface BibleLookupResult {
+  reference: string; verses: BibleVerse[];
+  text: string; slideText: string;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
 export interface ElectronAPI {
   getDisplays: () => Promise<any[]>;
   openPresentation: (displayId?: number) => Promise<boolean>;
@@ -69,8 +91,25 @@ openEditorWindow: (args: {
     fileName?: string;
     content:   string;
   } | null>;
+  readFileAsBase64: (filePath: string) => Promise<{
+    content?: string;
+    error?:   string;
+  } | null>;
+
+importPresentationFile: (filePath: string) => Promise<{
+  success:   boolean;
+  fileType?: 'pdf' | 'docx';   // 'docx' is also used for .doc files
+  pages?:    string[];          // PDF: text per page
+  html?:     string;            // DOCX/DOC: converted HTML
+  error?:    string;
+} | null>;
 
 
+// Bible
+bibleGetBooks: () => Promise<ApiResponse<BibleBook[]>>;
+  bibleGetChapter: (bookId: number, chapter: number) => Promise<ApiResponse<BibleVerse[]>>;
+  bibleLookup: (reference: string) => Promise<ApiResponse<BibleLookupResult>>;
+  bibleSearch: (query: string, limit?: number) => Promise<ApiResponse<BibleSearchResult[]>>;
 }
 
 

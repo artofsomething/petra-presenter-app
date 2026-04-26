@@ -97,4 +97,20 @@ onLoadFileInEditor: (callback: (data: {
 },
 getPendingEditorFile: () =>
   ipcRenderer.invoke('get-pending-editor-file'),
+readFileAsBase64: (filePath: string) =>
+    ipcRenderer.invoke('read-file-as-base64', filePath),
+
+importPresentationFile: (filePath: string) =>
+  ipcRenderer.invoke('import-presentation-file', filePath),
+
+//Bible section
+
+// Bible methods
+  bibleGetBooks: () => ipcRenderer.invoke('bible-get-books'),
+  bibleGetChapter: (bookId: number, chapter: number) =>
+    ipcRenderer.invoke('bible-get-chapter', bookId, chapter),
+  bibleLookup: (reference: string) =>
+    ipcRenderer.invoke('bible-lookup', reference),
+  bibleSearch: (query: string, limit?: number) =>
+    ipcRenderer.invoke('bible-search', query, limit || 30),
 });

@@ -21,7 +21,6 @@ import BackButton from '../components/Shared/BackButton';
 import SlideGeneratorModal from '../components/Editor/SlideGeneratorModal';
 import type { GeneratedSlide } from '../utils/slideGenerator';
 import AppCapturePicker from '../components/Advanced/AppCapturePicker';
-import FloatingElementActions from '../components/Editor/FloatingElementActions';
 import ElementContextMenu from '../components/Editor/FloatingElementActions';
 
 // ── Zoom constants ────────────────────────────────────────────────────────────
@@ -501,6 +500,7 @@ const EditorPage: React.FC = () => {
   const handleZoom      = useCallback((v: number) => setZoom(clampZoom(v)), [clampZoom]);
   const handleZoomReset = useCallback(() => setZoom(100), []);
 
+
   /**
    * Fit-to-view.
    *
@@ -561,7 +561,7 @@ const EditorPage: React.FC = () => {
     };
 
     // ResizeObserver on the child so we catch SlideCanvas internal resizes
-    const ro = new ResizeObserver(measure);
+  const ro = new ResizeObserver(measure);
     ro.observe(wrapper);
     const child = wrapper.firstElementChild;
     if (child) ro.observe(child);
@@ -679,36 +679,33 @@ const EditorPage: React.FC = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync helpers ──────────────────────────────────────────────────────────
-  const syncPresentation = useCallback(() => {
-    const state = usePresentationStore.getState();
-    if (!state.presentation || !connectedRef.current) return;
-    const json = JSON.stringify({
-      slides: state.presentation.slides.map(s => ({ id: s.id, elements: s.elements.length, bg: s.backgroundColor })),
-      name: state.presentation.name,
-    });
-    if (json === lastSentJsonRef.current) return;
-    lastSentJsonRef.current = json;
-    emitUpdatePresentation(
-      state.presentation,
-      isDirectControlEnabled ? state.currentSlideIndex : null,
-    );
-  }, [emitUpdatePresentation, isDirectControlEnabled]);
+  const syncPresentation = useCallback(async () => {
+  const state = usePresentationStore.getState();
+  if (!state.presentation || !connectedRef.current) return;
 
-  useEffect(() => {
-    if (!presentation || !isConnected) return;
-    if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = window.setTimeout(syncPresentation, 250);
-    return () => { if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current); };
-  }, [
-    presentation?.slides.length, presentation?.name,
-    JSON.stringify(presentation?.slides.map(s => s.elements.map(e => e.id))),
-    isConnected, isDirectControlEnabled, syncPresentation,
-  ]);
+  await emitUpdatePresentation(
+    state.presentation,
+    state.currentSlideIndex,
+  );
+}, [emitUpdatePresentation]);
+
 
   useEffect(() => {
     if (!isConnected || !presentation) return;
-    lastSentJsonRef.current = '';
-    setTimeout(syncPresentation, 200);
+
+    // Only push if this is a fresh connection (not a re-render)
+    const timer = window.setTimeout(async () => {
+      lastSentJsonRef.current = '';
+      const state = usePresentationStore.getState();
+      if (state.presentation && connectedRef.current) {
+        await emitUpdatePresentation(
+          state.presentation,
+          state.currentSlideIndex,
+        );
+      }
+    }, 500); // wait for socket registration to complete
+
+    return () => window.clearTimeout(timer);
   }, [isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -738,13 +735,24 @@ const EditorPage: React.FC = () => {
   };
 
   // ── Force sync ────────────────────────────────────────────────────────────
-  const handleForceSync = useCallback(() => {
+  const handleForceSync = useCallback(async () => {
     if (!presentation || !isConnected) return;
+
     setIsSyncing(true);
-    lastSentJsonRef.current = '';
-    const state = usePresentationStore.getState();
-    emitUpdatePresentation(state.presentation!, state.currentSlideIndex);
-    setTimeout(() => { setIsSyncing(false); setLastSyncTime(new Date()); }, 1500);
+    lastSentJsonRef.current = ''; // reset hash so it always sends
+
+    try {
+      const state = usePresentationStore.getState();
+      await emitUpdatePresentation(
+        state.presentation!,
+        state.currentSlideIndex, // ✅ always include slide index
+      );
+      setLastSyncTime(new Date());
+    } catch (err) {
+      console.error('[Editor] Force sync failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
   }, [presentation, isConnected, emitUpdatePresentation]);
 
   // ── Archive ───────────────────────────────────────────────────────────────
@@ -832,7 +840,7 @@ const EditorPage: React.FC = () => {
         if (result?.error) alert(`Save failed: ${result.error}`); return;
       }
       setOpenedFilePath(result.filePath);
-      if (isConnected) { lastSentJsonRef.current = ''; emitUpdatePresentation(presentation, currentSlideIndex); }
+      // if (isConnected) { lastSentJsonRef.current = ''; emitUpdatePresentation(presentation, currentSlideIndex); }
     } else {
       const blob = new Blob([content], { type: 'application/json' });
       const url  = URL.createObjectURL(blob);
@@ -840,7 +848,8 @@ const EditorPage: React.FC = () => {
       a.href     = url; a.download = `${presentation.name || 'presentation'}.json`;
       a.click(); URL.revokeObjectURL(url);
     }
-  }, [presentation, openedFilePath, saveToJSON, setOpenedFilePath, isConnected, emitUpdatePresentation, currentSlideIndex]);
+  }, [presentation, openedFilePath, saveToJSON, setOpenedFilePath]);
+    // , isConnected, emitUpdatePresentation, currentSlideIndex]);
 
   const handleSaveAs = useCallback(async () => {
     if (!presentation || !window.electronAPI?.saveFileDialog) return;
@@ -851,9 +860,10 @@ const EditorPage: React.FC = () => {
     if (!result || result.canceled || !result.filePath) return;
     if (result.success) {
       setOpenedFilePath(result.filePath);
-      if (isConnected) { lastSentJsonRef.current = ''; emitUpdatePresentation(presentation, currentSlideIndex); }
+      // if (isConnected) { lastSentJsonRef.current = ''; emitUpdatePresentation(presentation, currentSlideIndex); }
     } else if (result.error) alert(`Save failed: ${result.error}`);
-  }, [presentation, saveToJSON, setOpenedFilePath, isConnected, emitUpdatePresentation, currentSlideIndex]);
+  }, [presentation, saveToJSON, setOpenedFilePath]);
+    // , isConnected, emitUpdatePresentation, currentSlideIndex]);
 
   const handleLoad = useCallback(async () => {
     if (window.electronAPI?.openFileDialog) {
@@ -962,7 +972,7 @@ const EditorPage: React.FC = () => {
   }, [loadFromJSON, setOpenedFilePath]);
 
   useEffect(() => {
-    if (!openedFilePath || !presentation || !isConnected) return;
+    if (!openedFilePath || !presentation)return; // || !isConnected) return;
         if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = window.setTimeout(async () => {
       if (!window.electronAPI?.saveFileDialog) return;
@@ -1127,9 +1137,12 @@ const EditorPage: React.FC = () => {
                 emoji: '📦', label: 'Open Archive',
                 desc:  'Open a .preszip file with embedded assets',
                 onClick: handleLoadArchive,
-              },
+              }
+              
             ]}
           />
+
+        
 
           <div className="w-px h-6 bg-gray-700" />
 
@@ -1439,6 +1452,8 @@ const EditorPage: React.FC = () => {
           onClose={() => setShowCapturePicker(false)}
         />
       )}
+
+      
 
       {/* Global styles injected once */}
       <style>{`
